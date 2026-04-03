@@ -94,11 +94,16 @@ def build_texture_summary(texture_diffs: dict) -> dict:
         for comp_name, diff in comparisons.items():
             # Only show meaningful changes (above noise)
             is_meaningful = diff.pct_changed > 0.5 or diff.max_diff > 20
+            res_note = ""
+            if diff.resolution_mismatch:
+                res_note = f"{diff.resolution_a[0]}x{diff.resolution_a[1]} vs {diff.resolution_b[0]}x{diff.resolution_b[1]}"
             section[comp_name] = {
                 "pct_changed": diff.pct_changed,
                 "max_diff": diff.max_diff,
                 "mean_diff": diff.mean_diff,
                 "is_meaningful": is_meaningful,
+                "resolution_mismatch": diff.resolution_mismatch,
+                "resolution_note": res_note,
                 "heatmap": image_to_base64(diff.heatmap_path),
                 "overlay": image_to_base64(diff.overlay_path),
                 "side_by_side": image_to_base64(diff.side_by_side_path),

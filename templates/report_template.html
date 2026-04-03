@@ -255,6 +255,9 @@
       <div class="tex-comparison">
         <div class="tex-comp-header">
           <span>{{ comp_name | replace('_', ' ') | title }}</span>
+          {% if comp.resolution_mismatch %}
+            <span class="badge badge-warning">Resolution mismatch: {{ comp.resolution_note }}</span>
+          {% endif %}
           {% if not comp.is_meaningful %}
             <span class="badge badge-clean">No significant changes</span>
           {% endif %}

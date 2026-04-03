@@ -20,6 +20,7 @@ class TextureDiff:
 
 def compare_textures(path_a: str, path_b: str, output_dir: str, name: str) -> TextureDiff:
     """Compare two textures pixel-by-pixel. Generates heatmap, overlay, side-by-side."""
+    os.makedirs(output_dir, exist_ok=True)
     pil_a = Image.open(path_a).convert('RGB')
     pil_b = Image.open(path_b).convert('RGB')
 
@@ -30,10 +31,10 @@ def compare_textures(path_a: str, path_b: str, output_dir: str, name: str) -> Te
     img_a = np.array(pil_a)
     img_b = np.array(pil_b)
 
-    # Resize to match if different
+    # Resize to match if different — use the SMALLER resolution to avoid interpolation noise
     if img_a.shape != img_b.shape:
-        h = max(img_a.shape[0], img_b.shape[0])
-        w = max(img_a.shape[1], img_b.shape[1])
+        h = min(img_a.shape[0], img_b.shape[0])
+        w = min(img_a.shape[1], img_b.shape[1])
         img_a = np.array(Image.fromarray(img_a).resize((w, h), Image.LANCZOS))
         img_b = np.array(Image.fromarray(img_b).resize((w, h), Image.LANCZOS))
 
