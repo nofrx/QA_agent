@@ -16,27 +16,26 @@
 
     <div class="search-section">
       <input type="text" id="sku-input" placeholder="Enter SKU (e.g., F5714D05U-K11)" autocomplete="off" spellcheck="false">
-
-      <div class="url-section" id="url-section">
-        <div class="url-toggle">
-          <label><input type="checkbox" id="url-mode-toggle" onchange="toggleUrlMode()"> Paste URLs manually</label>
-        </div>
-        <div class="url-fields" id="url-fields" style="display:none;">
-          <input type="text" id="raw-url" placeholder="Raw scan GLB URL (CloudFront)" autocomplete="off">
-          <input type="text" id="touchedup-url" placeholder="Touched-up GLB URL (CloudFront)" autocomplete="off">
-          <input type="text" id="autoshadow-url" placeholder="AutoShadow GLB URL (CloudFront)" autocomplete="off">
-          <div class="helper-snippet">
-            <p>Run this in the dashboard browser console (replace SKU):</p>
-            <pre id="snippet-code"></pre>
-            <button class="btn-small" onclick="copySnippet()">Copy</button>
-            <p style="margin-top:8px;">Paste the JSON output here:</p>
-            <textarea id="json-paste" placeholder='{"sku":"...","raw":"...","touchedup":"...","autoshadow":"..."}' rows="3"></textarea>
-            <button class="btn-small" onclick="parseJsonPaste()">Fill URLs</button>
-          </div>
-        </div>
-      </div>
-
       <button class="btn" id="analyze-btn" onclick="analyzeSku()">Analyze</button>
+    </div>
+
+    <div class="mode-section">
+      <label class="mode-toggle">
+        <input type="checkbox" id="url-mode-toggle" onchange="toggleUrlMode()">
+        <span>Manual URL mode</span>
+      </label>
+      <div class="url-fields" id="url-fields" style="display:none;">
+        <input type="text" id="raw-url" placeholder="Raw scan GLB URL" autocomplete="off">
+        <input type="text" id="touchedup-url" placeholder="Touched-up GLB URL" autocomplete="off">
+        <input type="text" id="autoshadow-url" placeholder="AutoShadow GLB URL" autocomplete="off">
+        <details class="helper-details">
+          <summary>Get URLs from dashboard console</summary>
+          <pre id="snippet-code"></pre>
+          <button class="btn-small" onclick="copySnippet()">Copy</button>
+          <textarea id="json-paste" placeholder='Paste JSON output here...' rows="2"></textarea>
+          <button class="btn-small" onclick="parseJsonPaste()">Fill URLs</button>
+        </details>
+      </div>
     </div>
 
     <div class="progress-section" id="progress-section">

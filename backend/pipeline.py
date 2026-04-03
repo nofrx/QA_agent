@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import time
 from typing import Callable, Awaitable
 from backend.config import Config
 from backend.dashboard_api import find_scan_by_sku, ScanData
@@ -26,6 +27,8 @@ async def run_qa_pipeline(
     async def progress(msg: str):
         if on_progress:
             await on_progress(msg)
+
+    start_time = time.time()
 
     scan_info = {"sku": sku, "brand": "Unknown", "color": "Unknown", "silhouette": "Unknown"}
     if metadata:
@@ -163,5 +166,9 @@ async def run_qa_pipeline(
         "total_issues": sum(g.get("total_issues", 0) for g in [raw_geom, touchedup_geom, autoshadow_geom]),
         "report_path": report_path})
 
-    await progress(f"Report ready!")
+    elapsed = time.time() - start_time
+    minutes = int(elapsed // 60)
+    seconds = int(elapsed % 60)
+    total_issues = sum(g.get("total_issues", 0) for g in [raw_geom, touchedup_geom, autoshadow_geom])
+    await progress(f"Done in {minutes}m {seconds}s — {total_issues} issues found")
     return report_path, session_dir
