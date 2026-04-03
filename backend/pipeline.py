@@ -9,6 +9,7 @@ from backend.downloader import download_and_decrypt
 from backend.blender_runner import run_geometry_analysis, run_texture_extraction, run_issue_renderer
 from backend.texture_compare import compare_textures
 from backend.report_generator import generate_report
+from backend.qa_analyzer import analyze as run_qa_analysis
 from backend.storage import Storage
 
 
@@ -169,7 +170,12 @@ async def run_qa_pipeline(
             except Exception as e:
                 await progress(f"Warning: Issue rendering failed for {model_name}: {e}")
 
-    # Step 8: Generate report
+    # Step 8: Run QA analysis
+    await progress("Running QA analysis...")
+    qa_report = run_qa_analysis(geometry_results, texture_diffs, issue_renders)
+    await progress(f"QA verdict: {qa_report.verdict} ({qa_report.critical_count} critical, {qa_report.warning_count} warnings, {qa_report.expected_count} expected)")
+
+    # Step 9: Generate report
     await progress("Generating HTML report...")
     template_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "templates")
     report_path = generate_report(
@@ -178,18 +184,19 @@ async def run_qa_pipeline(
         geometry_results=geometry_results,
         texture_diffs=texture_diffs,
         issue_renders=issue_renders,
+        qa_report=qa_report,
         screenshots={},
         template_dir=template_dir)
 
     storage.save_metadata(session_dir, {
         **scan_info, "created_at": os.path.basename(session_dir),
         "status": "complete",
-        "total_issues": sum(g.get("total_issues", 0) for g in [raw_geom, touchedup_geom, autoshadow_geom]),
+        "verdict": qa_report.verdict,
+        "total_issues": qa_report.critical_count + qa_report.warning_count,
         "report_path": report_path})
 
     elapsed = time.time() - start_time
     minutes = int(elapsed // 60)
     seconds = int(elapsed % 60)
-    total_issues = sum(g.get("total_issues", 0) for g in [raw_geom, touchedup_geom, autoshadow_geom])
-    await progress(f"Done in {minutes}m {seconds}s — {total_issues} issues found")
+    await progress(f"Done in {minutes}m {seconds}s — verdict: {qa_report.verdict}")
     return report_path, session_dir

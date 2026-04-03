@@ -115,9 +115,9 @@ def build_texture_summary(texture_diffs: dict) -> dict:
 
 def generate_report(
     session_dir, scan_data, geometry_results, texture_diffs,
-    issue_renders, screenshots, template_dir
+    issue_renders, screenshots, template_dir, qa_report=None
 ):
-    """Generate an HTML QA report with embedded images."""
+    """Generate an HTML QA report with embedded images and QA findings."""
     env = Environment(loader=FileSystemLoader(template_dir), autoescape=True)
     env.filters['b64'] = image_to_base64
     template = env.get_template("report_template.html")
@@ -125,13 +125,28 @@ def generate_report(
     geometry_summary = build_geometry_summary(geometry_results)
     texture_sections = build_texture_summary(texture_diffs)
 
-    issues_with_images = []
-    for issue in issue_renders:
-        issues_with_images.append({
-            **issue,
-            "image": image_to_base64(issue.get("path", "")),
-            "severity": classify_issue_severity(issue.get("type", ""), issue.get("count", 0)),
-        })
+    # Build issue screenshots map for linking to findings
+    issue_images = {}
+    for issue in (issue_renders or []):
+        img = image_to_base64(issue.get("path", ""))
+        if img:
+            issue_images[issue.get("type", "")] = img
+
+    # Convert QA findings to template-friendly dicts
+    findings_list = []
+    if qa_report:
+        for f in qa_report.findings:
+            finding_dict = {
+                "rule_id": f.rule_id,
+                "severity": f.severity,
+                "title": f.title,
+                "explanation": f.explanation,
+                "recommendation": f.recommendation,
+                "model": f.model,
+                "data": f.data,
+                "image": issue_images.get(f.rule_id, ""),
+            }
+            findings_list.append(finding_dict)
 
     html = template.render(
         sku=scan_data.get("sku", "Unknown"),
@@ -141,7 +156,13 @@ def generate_report(
         generated_at=datetime.now().strftime("%Y-%m-%d %H:%M"),
         geometry=geometry_summary,
         textures=texture_sections,
-        issues=issues_with_images,
+        findings=findings_list,
+        verdict=qa_report.verdict if qa_report else "UNKNOWN",
+        verdict_summary=qa_report.verdict_summary if qa_report else "",
+        critical_count=qa_report.critical_count if qa_report else 0,
+        warning_count=qa_report.warning_count if qa_report else 0,
+        expected_count=qa_report.expected_count if qa_report else 0,
+        issue_images=issue_images,
         screenshots={k: image_to_base64(v) for k, v in screenshots.items()} if screenshots else {},
     )
 
