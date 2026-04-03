@@ -4,7 +4,7 @@ import os
 from typing import Callable, Awaitable
 from backend.config import Config
 from backend.dashboard_api import find_scan_by_sku, ScanData
-from backend.downloader import download_sku_models
+from backend.downloader import download_and_decrypt
 from backend.blender_runner import run_geometry_analysis, run_texture_extraction, run_issue_renderer
 from backend.texture_compare import compare_textures
 from backend.report_generator import generate_report
@@ -50,8 +50,6 @@ async def run_qa_pipeline(
     await progress("Session created")
 
     # Step 3: Download & decrypt from URLs
-    from backend.downloader import download_and_decrypt
-
     raw_path = os.path.join(session_dir, "raw_scan.glb")
     touchedup_path = os.path.join(session_dir, "touched_up.glb")
     autoshadow_path = os.path.join(session_dir, "autoshadow.glb")
