@@ -85,20 +85,21 @@ async def find_scan_by_sku_chrome(api_base: str, sku: str) -> ScanData:
         raise ValueError(f"Invalid SKU: {sku}")
 
     # JavaScript that:
-    # 1. Paginates through /api/assets (200 per page, up to 100 pages = 20K assets)
-    # 2. Finds asset with matching sku field
+    # 1. Paginates through /api/assets (200 per page, up to 25 pages = 5K assets)
+    # 2. Finds asset with matching sku field (case-insensitive)
     # 3. Extracts GLB filenames from the canonicalAsset's latest version
+    # 5K assets covers ~2 months of production. Older SKUs need URL mode.
     js_code = (
-        "var sku='" + safe_sku + "';"
+        "var sku='" + safe_sku + "'.toUpperCase();"
         "var found=null;"
-        "for(var p=1;p<=100;p++){"
+        "for(var p=1;p<=25;p++){"
         "var x=new XMLHttpRequest();"
         "x.open('GET','/api/assets?limit=200&page='+p,false);"
         "x.send();"
         "if(x.status!==200)break;"
         "var d=JSON.parse(x.responseText);"
         "for(var i=0;i<d.docs.length;i++){"
-        "if(d.docs[i].sku===sku){found=d.docs[i];break;}}"
+        "if((d.docs[i].sku||'').toUpperCase()===sku){found=d.docs[i];break;}}"
         "if(found||!d.hasNextPage)break;}"
         "if(!found){'NOT_FOUND';}else{"
         "var cp=found.canonicalAsset;"
@@ -149,7 +150,7 @@ async def find_scan_by_sku_chrome(api_base: str, sku: str) -> ScanData:
     try:
         result = subprocess.run(
             ["osascript", script_path],
-            capture_output=True, text=True, timeout=120  # Allow time for pagination
+            capture_output=True, text=True, timeout=60  # ~25 pages at ~1-2s each
         )
         output = result.stdout.strip()
 
@@ -164,8 +165,8 @@ async def find_scan_by_sku_chrome(api_base: str, sku: str) -> ScanData:
 
         if output == "NOT_FOUND":
             raise ValueError(
-                f"SKU {sku} not found in dashboard assets. "
-                "Check the SKU is correct (e.g., F5714D05U-K11)."
+                f"SKU {sku} not found in recent assets (searched 5000). "
+                "For older models, use URL mode — check the checkbox below."
             )
 
         if output == "NO_TOUCHUP":
