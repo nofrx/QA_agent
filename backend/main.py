@@ -1,9 +1,10 @@
 import asyncio
 import os
 import json
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
+from pydantic import BaseModel
 from starlette.responses import StreamingResponse
 from backend.config import load_config
 from backend.pipeline import run_qa_pipeline
@@ -79,6 +80,42 @@ async def job_status(sku: str):
                 break
             await asyncio.sleep(0.5)
     return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+class UrlAnalysisRequest(BaseModel):
+    sku: str
+    raw_url: str
+    touchedup_url: str
+    autoshadow_url: str
+    brand: str = "Unknown"
+    color: str = "Unknown"
+    silhouette: str = "Unknown"
+
+
+@app.post("/api/analyze-urls")
+async def start_analysis_urls(req: UrlAnalysisRequest):
+    """Start QA analysis using direct CloudFront URLs."""
+    sku = req.sku.strip().upper()
+    if sku in jobs and jobs[sku].get("status") == "running":
+        raise HTTPException(400, f"Analysis already running for {sku}")
+    jobs[sku] = {"status": "running", "messages": [], "result": None, "session_dir": None}
+
+    urls = {"raw": req.raw_url, "touchedup": req.touchedup_url, "autoshadow": req.autoshadow_url}
+
+    async def run():
+        try:
+            async def on_progress(msg):
+                jobs[sku]["messages"].append(msg)
+            report_path, session_dir = await run_qa_pipeline(config, sku, on_progress, urls=urls)
+            jobs[sku]["status"] = "complete"
+            jobs[sku]["result"] = report_path
+            jobs[sku]["session_dir"] = session_dir
+        except Exception as e:
+            jobs[sku]["status"] = "error"
+            jobs[sku]["messages"].append(f"Error: {str(e)}")
+
+    asyncio.create_task(run())
+    return {"job_id": sku, "status": "started"}
 
 
 @app.get("/api/reports")

@@ -1,5 +1,30 @@
 // Shoe QA Frontend
 
+function toggleUrlMode() {
+  const fields = document.getElementById('url-fields');
+  const toggle = document.getElementById('url-mode-toggle');
+  fields.style.display = toggle.checked ? 'block' : 'none';
+}
+
+function copySnippet() {
+  const code = document.getElementById('snippet-code').textContent;
+  navigator.clipboard.writeText(code);
+}
+
+function parseJsonPaste() {
+  const textarea = document.getElementById('json-paste');
+  try {
+    const data = JSON.parse(textarea.value.trim());
+    if (data.sku) document.getElementById('sku-input').value = data.sku;
+    if (data.raw) document.getElementById('raw-url').value = data.raw;
+    if (data.touchedup) document.getElementById('touchedup-url').value = data.touchedup;
+    if (data.autoshadow) document.getElementById('autoshadow-url').value = data.autoshadow;
+    textarea.style.borderColor = '#4ecca3';
+  } catch (e) {
+    textarea.style.borderColor = '#e94560';
+  }
+}
+
 function analyzeSku() {
   const input = document.getElementById('sku-input');
   const sku = input.value.trim();
@@ -23,12 +48,42 @@ function analyzeSku() {
   progressSection.classList.add('active');
   progressHeader.innerHTML = '<div class="spinner"></div><span>Analyzing ' + escapeHtml(sku.toUpperCase()) + '...</span>';
 
-  // Start analysis
-  fetch('/api/analyze/' + encodeURIComponent(sku), { method: 'POST' })
+  // Determine mode: URL or API
+  const urlMode = document.getElementById('url-mode-toggle') && document.getElementById('url-mode-toggle').checked;
+
+  let fetchPromise;
+  if (urlMode) {
+    const rawUrl = document.getElementById('raw-url').value.trim();
+    const touchedupUrl = document.getElementById('touchedup-url').value.trim();
+    const autoshadowUrl = document.getElementById('autoshadow-url').value.trim();
+
+    if (!rawUrl || !touchedupUrl || !autoshadowUrl) {
+      btn.disabled = false;
+      progressSection.classList.remove('active');
+      errorCard.querySelector('p').textContent = 'Please fill in all 3 GLB URLs';
+      errorCard.classList.add('active');
+      return;
+    }
+
+    fetchPromise = fetch('/api/analyze-urls', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        sku: sku,
+        raw_url: rawUrl,
+        touchedup_url: touchedupUrl,
+        autoshadow_url: autoshadowUrl
+      })
+    });
+  } else {
+    fetchPromise = fetch('/api/analyze/' + encodeURIComponent(sku), { method: 'POST' });
+  }
+
+  fetchPromise
     .then(res => {
       if (!res.ok) return res.json().then(d => { throw new Error(d.detail || 'Failed to start'); });
       // Open SSE for progress
-      const evtSource = new EventSource('/api/status/' + encodeURIComponent(sku));
+      const evtSource = new EventSource('/api/status/' + encodeURIComponent(sku.toUpperCase()));
 
       evtSource.onmessage = function(event) {
         const data = JSON.parse(event.data);
@@ -99,7 +154,6 @@ function loadReports() {
         return;
       }
 
-      // Group by SKU
       const grouped = {};
       reports.forEach(r => {
         if (!grouped[r.sku]) grouped[r.sku] = [];
@@ -119,9 +173,7 @@ function loadReports() {
           const status = report.status || 'unknown';
 
           let badges = '';
-          if (status === 'complete') {
-            badges += '<span class="badge badge-complete">Complete</span> ';
-          }
+          if (status === 'complete') badges += '<span class="badge badge-complete">Complete</span> ';
           if (typeof issues === 'number' && issues > 0) {
             badges += '<span class="badge badge-issues">' + issues + ' issue' + (issues !== 1 ? 's' : '') + '</span>';
           } else if (status === 'complete') {
@@ -158,7 +210,6 @@ function escapeHtml(str) {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-// Enter key triggers analyze
 document.addEventListener('DOMContentLoaded', function() {
   const input = document.getElementById('sku-input');
   if (input) {
@@ -166,8 +217,6 @@ document.addEventListener('DOMContentLoaded', function() {
       if (e.key === 'Enter') analyzeSku();
     });
   }
-
-  // Auto-load reports if on reports page
   if (document.getElementById('reports-container')) {
     loadReports();
   }

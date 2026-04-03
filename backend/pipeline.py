@@ -11,27 +11,58 @@ from backend.report_generator import generate_report
 from backend.storage import Storage
 
 
-async def run_qa_pipeline(config: Config, sku: str, on_progress: Callable[[str], Awaitable[None]] = None):
+async def run_qa_pipeline(
+    config: Config, sku: str,
+    on_progress: Callable[[str], Awaitable[None]] = None,
+    urls: dict = None
+):
+    """Run QA pipeline. If urls dict provided, skip API lookup and download directly.
+    urls format: {"raw": "cloudfront_url", "touchedup": "cloudfront_url", "autoshadow": "cloudfront_url"}
+    """
     storage = Storage(config.reports_dir)
 
     async def progress(msg: str):
         if on_progress:
             await on_progress(msg)
 
-    # Step 1: Find scan
-    await progress(f"Looking up SKU {sku} on dashboard...")
-    scan_data = await find_scan_by_sku(config.dashboard_api, config.api_key, sku)
-    await progress(f"Found: {scan_data.brand} {scan_data.sku} ({scan_data.color}, {scan_data.silhouette})")
+    scan_info = {"sku": sku, "brand": "Unknown", "color": "Unknown", "silhouette": "Unknown"}
+
+    if urls:
+        # Direct URL mode — skip API lookup
+        await progress(f"Using provided URLs for {sku}")
+    else:
+        # API mode — try to look up scan data
+        try:
+            await progress(f"Looking up SKU {sku} on dashboard...")
+            scan_data = await find_scan_by_sku(config.dashboard_api, config.api_key, sku)
+            await progress(f"Found: {scan_data.brand} {scan_data.sku} ({scan_data.color}, {scan_data.silhouette})")
+            scan_info = {"sku": scan_data.sku, "brand": scan_data.brand, "color": scan_data.color, "silhouette": scan_data.silhouette}
+            urls = {
+                "raw": f"{config.cloudfront_base}/{scan_data.raw_scan_filename}",
+                "touchedup": f"{config.cloudfront_base}/{scan_data.touchedup_filename}",
+                "autoshadow": f"{config.cloudfront_base}/{scan_data.autoshadow_filename}",
+            }
+        except Exception as e:
+            raise ValueError(f"API lookup failed: {e}. Use URL mode instead.")
 
     # Step 2: Create session
     session_dir = storage.create_session(sku)
     await progress(f"Session created")
 
-    # Step 3: Download & decrypt
-    raw_path, touchedup_path, autoshadow_path = await download_sku_models(
-        config.cloudfront_base, scan_data.raw_scan_filename,
-        scan_data.touchedup_filename, scan_data.autoshadow_filename,
-        session_dir, on_progress=progress)
+    # Step 3: Download & decrypt from URLs
+    from backend.downloader import download_and_decrypt
+    import os
+
+    raw_path = os.path.join(session_dir, "raw_scan.glb")
+    touchedup_path = os.path.join(session_dir, "touched_up.glb")
+    autoshadow_path = os.path.join(session_dir, "autoshadow.glb")
+
+    await progress("Downloading raw scan...")
+    await download_and_decrypt(urls["raw"], raw_path, progress)
+    await progress("Downloading touched-up model...")
+    await download_and_decrypt(urls["touchedup"], touchedup_path, progress)
+    await progress("Downloading autoshadow model...")
+    await download_and_decrypt(urls["autoshadow"], autoshadow_path, progress)
 
     # Step 4: Geometry analysis
     await progress("Running Blender geometry analysis on raw scan...")
@@ -48,14 +79,31 @@ async def run_qa_pipeline(config: Config, sku: str, on_progress: Callable[[str],
 
     geometry_results = {"raw": raw_geom, "touchedup": touchedup_geom, "autoshadow": autoshadow_geom}
 
-    # Step 5: Extract textures
+    # Step 5: Extract textures (with error resilience)
     tex_dir = os.path.join(session_dir, "textures")
-    await progress("Extracting textures from raw scan...")
-    raw_tex = run_texture_extraction(config.blender_path, raw_path, tex_dir)
-    await progress("Extracting textures from touched-up...")
-    touchedup_tex = run_texture_extraction(config.blender_path, touchedup_path, tex_dir)
-    await progress("Extracting textures from autoshadow...")
-    autoshadow_tex = run_texture_extraction(config.blender_path, autoshadow_path, tex_dir)
+
+    raw_tex = {"textures": {}}
+    touchedup_tex = {"textures": {}}
+    autoshadow_tex = {"textures": {}}
+
+    for label, path, result_ref in [
+        ("raw scan", raw_path, "raw"),
+        ("touched-up", touchedup_path, "touchedup"),
+        ("autoshadow", autoshadow_path, "autoshadow"),
+    ]:
+        try:
+            await progress(f"Extracting textures from {label}...")
+            tex_result = run_texture_extraction(config.blender_path, path, tex_dir)
+            if result_ref == "raw":
+                raw_tex = tex_result
+            elif result_ref == "touchedup":
+                touchedup_tex = tex_result
+            else:
+                autoshadow_tex = tex_result
+            tex_count = len(tex_result.get("textures", {}))
+            await progress(f"  Extracted {tex_count} textures from {label}")
+        except Exception as e:
+            await progress(f"Warning: Texture extraction failed for {label}: {e}")
 
     # Step 6: Texture comparison
     await progress("Comparing textures...")
@@ -97,7 +145,7 @@ async def run_qa_pipeline(config: Config, sku: str, on_progress: Callable[[str],
     template_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "templates")
     report_path = generate_report(
         session_dir=session_dir,
-        scan_data={"sku": scan_data.sku, "brand": scan_data.brand, "color": scan_data.color, "silhouette": scan_data.silhouette},
+        scan_data=scan_info,
         geometry_results=geometry_results,
         texture_diffs=texture_diffs,
         issue_renders=issue_renders,
@@ -105,8 +153,7 @@ async def run_qa_pipeline(config: Config, sku: str, on_progress: Callable[[str],
         template_dir=template_dir)
 
     storage.save_metadata(session_dir, {
-        "sku": scan_data.sku, "brand": scan_data.brand, "color": scan_data.color,
-        "silhouette": scan_data.silhouette, "created_at": os.path.basename(session_dir),
+        **scan_info, "created_at": os.path.basename(session_dir),
         "status": "complete",
         "total_issues": sum(g.get("total_issues", 0) for g in [raw_geom, touchedup_geom, autoshadow_geom]),
         "report_path": report_path})

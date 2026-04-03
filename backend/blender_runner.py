@@ -25,7 +25,8 @@ def run_geometry_analysis(
     )
     script_path = os.path.join(script_dir, "geometry_analyzer.py")
     run_blender_script(
-        blender_path, script_path, ["--glb_path", glb_path, "--output", output_json]
+        blender_path, script_path, ["--glb_path", glb_path, "--output", output_json],
+        timeout=600,  # 10 min for large models
     )
     with open(output_json) as f:
         return json.load(f)
@@ -38,11 +39,14 @@ def run_texture_extraction(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "blender"
     )
     script_path = os.path.join(script_dir, "texture_extractor.py")
-    output_json = os.path.join(output_dir, "extraction_result.json")
+    # Use unique output JSON per model to avoid overwrites
+    basename = os.path.splitext(os.path.basename(glb_path))[0]
+    output_json = os.path.join(output_dir, f"extraction_{basename}.json")
     run_blender_script(
         blender_path,
         script_path,
         ["--glb_path", glb_path, "--output_dir", output_dir, "--output_json", output_json],
+        timeout=600,  # 10 min for large models
     )
     with open(output_json) as f:
         return json.load(f)

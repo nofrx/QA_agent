@@ -130,6 +130,113 @@ header p {
   transform: none;
 }
 
+/* URL Mode */
+.search-section {
+  flex-wrap: wrap;
+}
+
+.url-section {
+  width: 100%;
+}
+
+.url-toggle {
+  margin-top: 4px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.url-toggle label {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.url-toggle input[type="checkbox"] {
+  accent-color: var(--accent);
+}
+
+.url-fields {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.url-fields input {
+  padding: 10px 14px;
+  font-size: 0.85rem;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  outline: none;
+}
+
+.url-fields input:focus {
+  border-color: var(--accent);
+}
+
+.helper-snippet {
+  margin-top: 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+}
+
+.helper-snippet p {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.helper-snippet pre {
+  font-size: 0.7rem;
+  color: var(--accent);
+  background: var(--bg-primary);
+  padding: 10px;
+  border-radius: 4px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 80px;
+}
+
+.helper-snippet textarea {
+  width: 100%;
+  padding: 10px;
+  font-size: 0.8rem;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  outline: none;
+  resize: vertical;
+}
+
+.helper-snippet textarea:focus {
+  border-color: var(--accent);
+}
+
+.btn-small {
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--btn-bg);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-small:hover {
+  background: var(--accent-dim);
+}
+
 /* Progress Feed */
 .progress-section {
   display: none;
