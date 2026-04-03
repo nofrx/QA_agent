@@ -115,17 +115,24 @@ def extract_textures(mesh_obj, output_dir, prefix):
 def main():
     args = get_args()
     os.makedirs(args.output_dir, exist_ok=True)
-    clear_scene()
-    bpy.ops.import_scene.gltf(filepath=args.glb_path)
-    meshes = [o for o in bpy.data.objects if o.type == 'MESH']
 
-    if not meshes:
-        result = {"error": "No meshes found", "textures": {}}
-    else:
-        main_mesh = max(meshes, key=lambda o: len(o.data.polygons))
-        basename = os.path.basename(args.glb_path).replace('.glb', '')
-        textures = extract_textures(main_mesh, args.output_dir, basename)
-        result = {"textures": textures, "mesh_name": main_mesh.name}
+    try:
+        clear_scene()
+        bpy.ops.import_scene.gltf(filepath=args.glb_path)
+        meshes = [o for o in bpy.data.objects if o.type == 'MESH']
+
+        if not meshes:
+            result = {"error": "No meshes found", "textures": {}}
+        else:
+            main_mesh = max(meshes, key=lambda o: len(o.data.polygons))
+            basename = os.path.basename(args.glb_path).replace('.glb', '')
+            textures = extract_textures(main_mesh, args.output_dir, basename)
+            result = {"textures": textures, "mesh_name": main_mesh.name}
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        result = {"error": str(e), "textures": {}}
 
     with open(args.output_json, 'w') as f:
         json.dump(result, f, indent=2)
@@ -133,4 +140,13 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        # Write error JSON so backend doesn't hang
+        args = get_args()
+        with open(args.output_json, 'w') as f:
+            json.dump({"error": str(e), "textures": {}}, f)
+        sys.exit(1)

@@ -69,46 +69,43 @@ def render_at_centroid(obj, centers_3d, issue_name, output_dir):
 def main():
     args = get_args()
     os.makedirs(args.output_dir, exist_ok=True)
-
-    with open(args.issues_json) as f:
-        issues = json.load(f)
-
-    clear_scene()
-    bpy.ops.import_scene.gltf(filepath=args.glb_path)
-    setup_render()
-
-    meshes = [o for o in bpy.data.objects if o.type == 'MESH']
-    if not meshes:
-        with open(args.output_json, 'w') as f:
-            json.dump({"error": "No meshes", "renders": []}, f)
-        return
-
-    main_mesh = max(meshes, key=lambda o: len(o.data.polygons))
     renders = []
 
-    # Flipped normals
-    flipped = issues.get("flipped_normals", [])
-    if flipped:
-        centers = [Vector(f["center"]) for f in flipped[:20]]
-        path = render_at_centroid(main_mesh, centers, "flipped_normals", args.output_dir)
-        if path:
-            renders.append({"type": "flipped_normals", "path": path, "count": len(flipped)})
+    try:
+        with open(args.issues_json) as f:
+            issues = json.load(f)
 
-    # Negative UV
-    neg_uvs = issues.get("negative_uv_coords", [])
-    if neg_uvs:
-        centers = [Vector(f["center"]) for f in neg_uvs[:20]]
-        path = render_at_centroid(main_mesh, centers, "negative_uv", args.output_dir)
-        if path:
-            renders.append({"type": "negative_uv", "path": path, "count": len(neg_uvs)})
+        clear_scene()
+        bpy.ops.import_scene.gltf(filepath=args.glb_path)
+        setup_render()
 
-    # Non-manifold
-    non_manifold = issues.get("non_manifold_edges", [])
-    if non_manifold:
-        centers = [Vector(e["center"]) for e in non_manifold[:20]]
-        path = render_at_centroid(main_mesh, centers, "non_manifold", args.output_dir)
-        if path:
-            renders.append({"type": "non_manifold", "path": path, "count": len(non_manifold)})
+        meshes = [o for o in bpy.data.objects if o.type == 'MESH']
+        if not meshes:
+            with open(args.output_json, 'w') as f:
+                json.dump({"error": "No meshes", "renders": []}, f)
+            return
+
+        main_mesh = max(meshes, key=lambda o: len(o.data.polygons))
+
+        # Render each issue type
+        issue_types = [
+            ("flipped_normals", "flipped_normals"),
+            ("negative_uv_coords", "negative_uv"),
+            ("non_manifold_edges", "non_manifold"),
+            ("out_of_range_uv_coords", "out_of_range_uv"),
+        ]
+        for json_key, render_name in issue_types:
+            items = issues.get(json_key, [])
+            if items:
+                centers = [Vector(item["center"]) for item in items[:20]]
+                path = render_at_centroid(main_mesh, centers, render_name, args.output_dir)
+                if path:
+                    renders.append({"type": render_name, "path": path, "count": len(items)})
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        renders = [{"type": "error", "error": str(e), "count": 0}]
 
     with open(args.output_json, 'w') as f:
         json.dump({"renders": renders}, f, indent=2)
@@ -116,4 +113,12 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        args = get_args()
+        with open(args.output_json, 'w') as f:
+            json.dump({"error": str(e), "renders": []}, f)
+        sys.exit(1)

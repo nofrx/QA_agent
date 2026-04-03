@@ -7,6 +7,7 @@ import bmesh
 import json
 import sys
 import os
+import traceback
 from mathutils import Vector
 
 
@@ -29,8 +30,16 @@ def clear_scene():
 
 
 def import_glb(path):
-    bpy.ops.import_scene.gltf(filepath=path)
-    return [o for o in bpy.data.objects if o.type == 'MESH']
+    """Import GLB and return mesh objects. Raises on failure."""
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"GLB file not found: {path}")
+    result = bpy.ops.import_scene.gltf(filepath=path)
+    if 'FINISHED' not in result:
+        raise RuntimeError(f"GLB import failed: {result}")
+    meshes = [o for o in bpy.data.objects if o.type == 'MESH']
+    if not meshes:
+        raise RuntimeError("No mesh objects found after GLB import")
+    return meshes
 
 
 def analyze_mesh(obj):
@@ -51,23 +60,29 @@ def analyze_mesh(obj):
     mins = [min(v[i] for v in bbox) for i in range(3)]
     maxs = [max(v[i] for v in bbox) for i in range(3)]
     result["bounding_box"] = {
-        "min": mins,
-        "max": maxs,
-        "size": [maxs[i] - mins[i] for i in range(3)],
+        "min": [round(v, 4) for v in mins],
+        "max": [round(v, 4) for v in maxs],
+        "size": [round(maxs[i] - mins[i], 4) for i in range(3)],
     }
 
-    # Flipped normals
+    # Flipped normals — use local neighborhood comparison, not global center.
+    # A face is "flipped" if its normal points opposite to the average of its neighbors.
     flipped = []
-    mesh_center = sum((v.co for v in bm.verts), Vector()) / max(len(bm.verts), 1)
     for face in bm.faces:
-        center = face.calc_center_median()
-        to_center = (mesh_center - center).normalized()
-        if face.normal.dot(to_center) > 0.5:
-            flipped.append({
-                "face_index": face.index,
-                "center": list(center),
-                "normal": list(face.normal),
-            })
+        neighbor_normals = []
+        for edge in face.edges:
+            for linked_face in edge.link_faces:
+                if linked_face != face:
+                    neighbor_normals.append(linked_face.normal)
+        if neighbor_normals:
+            avg_neighbor = sum(neighbor_normals, Vector()) / len(neighbor_normals)
+            if face.normal.dot(avg_neighbor) < -0.5:
+                center = face.calc_center_median()
+                flipped.append({
+                    "face_index": face.index,
+                    "center": [round(center.x, 4), round(center.y, 4), round(center.z, 4)],
+                    "normal": [round(face.normal.x, 4), round(face.normal.y, 4), round(face.normal.z, 4)],
+                })
     result["flipped_normals"] = flipped[:100]
     result["flipped_normals_count"] = len(flipped)
 
@@ -78,14 +93,14 @@ def analyze_mesh(obj):
             center = (edge.verts[0].co + edge.verts[1].co) / 2
             non_manifold.append({
                 "edge_index": edge.index,
-                "center": list(center),
+                "center": [round(center.x, 4), round(center.y, 4), round(center.z, 4)],
             })
     result["non_manifold_edges"] = non_manifold[:100]
     result["non_manifold_count"] = len(non_manifold)
 
     # Loose vertices
     loose = [
-        {"index": v.index, "co": list(v.co)}
+        {"index": v.index, "co": [round(v.co.x, 4), round(v.co.y, 4), round(v.co.z, 4)]}
         for v in bm.verts if not v.link_edges
     ]
     result["loose_vertices"] = loose[:100]
@@ -94,10 +109,16 @@ def analyze_mesh(obj):
     # UV analysis
     uv_layers = mesh.uv_layers
     result["uv_layer_count"] = len(uv_layers)
+    result["negative_uv_count"] = 0
+    result["out_of_range_uv_count"] = 0
+    result["uv_overlap_count"] = 0
+
     if uv_layers:
         uv_layer = bm.loops.layers.uv.active
         if uv_layer:
+            # Negative UV coordinates (< 0) — can't be baked
             negative_uvs = []
+            out_of_range_uvs = []
             for face in bm.faces:
                 for loop in face.loops:
                     uv = loop[uv_layer].uv
@@ -105,24 +126,22 @@ def analyze_mesh(obj):
                         center = face.calc_center_median()
                         negative_uvs.append({
                             "face_index": face.index,
-                            "uv": [uv.x, uv.y],
-                            "center": list(center),
+                            "uv": [round(uv.x, 4), round(uv.y, 4)],
+                            "center": [round(center.x, 4), round(center.y, 4), round(center.z, 4)],
                         })
+                        break  # One per face is enough
+                    if uv.x > 1.01 or uv.y > 1.01:
+                        center = face.calc_center_median()
+                        out_of_range_uvs.append({
+                            "face_index": face.index,
+                            "uv": [round(uv.x, 4), round(uv.y, 4)],
+                            "center": [round(center.x, 4), round(center.y, 4), round(center.z, 4)],
+                        })
+                        break
             result["negative_uv_coords"] = negative_uvs[:50]
             result["negative_uv_count"] = len(negative_uvs)
-
-            uv_positions = {}
-            overlaps = 0
-            for face in bm.faces:
-                face_uvs = tuple(
-                    (round(loop[uv_layer].uv.x, 4), round(loop[uv_layer].uv.y, 4))
-                    for loop in face.loops
-                )
-                if face_uvs in uv_positions:
-                    overlaps += 1
-                else:
-                    uv_positions[face_uvs] = face.index
-            result["uv_overlap_count"] = overlaps
+            result["out_of_range_uv_coords"] = out_of_range_uvs[:50]
+            result["out_of_range_uv_count"] = len(out_of_range_uvs)
 
     # Materials
     result["material_count"] = len(mesh.materials)
@@ -137,12 +156,16 @@ def analyze_mesh(obj):
 
 def analyze_textures(obj):
     textures = []
+    seen = set()
     for mat in obj.data.materials:
         if not mat or not mat.node_tree:
             continue
         for node in mat.node_tree.nodes:
             if node.type == 'TEX_IMAGE' and node.image:
                 img = node.image
+                if img.name in seen:
+                    continue
+                seen.add(img.name)
                 textures.append({
                     "name": img.name,
                     "width": img.size[0],
@@ -154,25 +177,36 @@ def analyze_textures(obj):
 
 def main():
     args = get_args()
-    clear_scene()
-    meshes = import_glb(args.glb_path)
 
-    if not meshes:
-        result = {"error": "No meshes found in GLB"}
-    else:
+    try:
+        clear_scene()
+        meshes = import_glb(args.glb_path)
         main_mesh = max(meshes, key=lambda o: len(o.data.polygons))
+
         result = analyze_mesh(main_mesh)
         result["textures"] = analyze_textures(main_mesh)
         result["total_meshes"] = len(meshes)
         result["file_path"] = args.glb_path
         result["file_size_mb"] = round(os.path.getsize(args.glb_path) / (1024 * 1024), 2)
 
+    except Exception as e:
+        traceback.print_exc()
+        result = {
+            "error": str(e),
+            "file_path": args.glb_path,
+            "vertices": 0, "faces": 0, "edges": 0,
+            "flipped_normals_count": 0, "non_manifold_count": 0,
+            "loose_vertices_count": 0, "negative_uv_count": 0,
+            "out_of_range_uv_count": 0, "uv_overlap_count": 0,
+            "textures": [], "materials": [],
+        }
+
     result["total_issues"] = (
         result.get("flipped_normals_count", 0)
         + result.get("non_manifold_count", 0)
         + result.get("loose_vertices_count", 0)
         + result.get("negative_uv_count", 0)
-        + result.get("uv_overlap_count", 0)
+        + result.get("out_of_range_uv_count", 0)
     )
 
     with open(args.output, 'w') as f:
@@ -181,4 +215,12 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        # Write error JSON even on crash so backend doesn't hang
+        traceback.print_exc()
+        args = get_args()
+        with open(args.output, 'w') as f:
+            json.dump({"error": str(e), "total_issues": 0}, f)
+        sys.exit(1)
