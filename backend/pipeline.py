@@ -72,17 +72,19 @@ async def run_qa_pipeline(
         except Exception as e:
             raise ValueError(f"Failed to download {label}: {e}")
 
-    # Step 4: Geometry analysis
+    # Step 4: Geometry analysis (run in thread to avoid blocking event loop)
+    loop = asyncio.get_event_loop()
+
     await progress("Running Blender geometry analysis on raw scan...")
-    raw_geom = run_geometry_analysis(config.blender_path, raw_path, os.path.join(session_dir, "geometry_raw.json"))
+    raw_geom = await loop.run_in_executor(None, run_geometry_analysis, config.blender_path, raw_path, os.path.join(session_dir, "geometry_raw.json"))
     await progress(f"Raw scan: {raw_geom.get('vertices', 0)} verts, {raw_geom.get('total_issues', 0)} issues")
 
     await progress("Running Blender geometry analysis on touched-up...")
-    touchedup_geom = run_geometry_analysis(config.blender_path, touchedup_path, os.path.join(session_dir, "geometry_touchedup.json"))
+    touchedup_geom = await loop.run_in_executor(None, run_geometry_analysis, config.blender_path, touchedup_path, os.path.join(session_dir, "geometry_touchedup.json"))
     await progress(f"Touched-up: {touchedup_geom.get('vertices', 0)} verts, {touchedup_geom.get('total_issues', 0)} issues")
 
     await progress("Running Blender geometry analysis on autoshadow...")
-    autoshadow_geom = run_geometry_analysis(config.blender_path, autoshadow_path, os.path.join(session_dir, "geometry_autoshadow.json"))
+    autoshadow_geom = await loop.run_in_executor(None, run_geometry_analysis, config.blender_path, autoshadow_path, os.path.join(session_dir, "geometry_autoshadow.json"))
     await progress(f"AutoShadow: {autoshadow_geom.get('vertices', 0)} verts, {autoshadow_geom.get('total_issues', 0)} issues")
 
     geometry_results = {"raw": raw_geom, "touchedup": touchedup_geom, "autoshadow": autoshadow_geom}
@@ -101,7 +103,7 @@ async def run_qa_pipeline(
     ]:
         try:
             await progress(f"Extracting textures from {label}...")
-            tex_result = run_texture_extraction(config.blender_path, path, tex_dir)
+            tex_result = await loop.run_in_executor(None, run_texture_extraction, config.blender_path, path, tex_dir)
             if result_ref == "raw":
                 raw_tex = tex_result
             elif result_ref == "touchedup":
@@ -122,9 +124,9 @@ async def run_qa_pipeline(
         autoshadow_t = autoshadow_tex.get("textures", {}).get(tex_type, {}).get("path")
         comparisons = {}
         if raw_t and touchedup_t:
-            comparisons["raw_vs_touchedup"] = compare_textures(raw_t, touchedup_t, tex_dir, f"{tex_type}_raw_vs_touchedup")
+            comparisons["raw_vs_touchedup"] = await loop.run_in_executor(None, compare_textures, raw_t, touchedup_t, tex_dir, f"{tex_type}_raw_vs_touchedup")
         if touchedup_t and autoshadow_t:
-            comparisons["touchedup_vs_autoshadow"] = compare_textures(touchedup_t, autoshadow_t, tex_dir, f"{tex_type}_touchedup_vs_autoshadow")
+            comparisons["touchedup_vs_autoshadow"] = await loop.run_in_executor(None, compare_textures, touchedup_t, autoshadow_t, tex_dir, f"{tex_type}_touchedup_vs_autoshadow")
         if comparisons:
             texture_diffs[tex_type] = comparisons
     await progress(f"Texture comparison complete: {len(texture_diffs)} map types analyzed")
@@ -141,7 +143,7 @@ async def run_qa_pipeline(
         if geom.get("total_issues", 0) > 0:
             issues_json = os.path.join(session_dir, f"geometry_{model_name}.json")
             try:
-                render_result = run_issue_renderer(config.blender_path, model_path, issues_json, issues_dir)
+                render_result = await loop.run_in_executor(None, run_issue_renderer, config.blender_path, model_path, issues_json, issues_dir)
                 for render in render_result.get("renders", []):
                     render["model"] = model_name
                     issue_renders.append(render)

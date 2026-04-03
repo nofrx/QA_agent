@@ -8,6 +8,8 @@ class Storage:
         os.makedirs(reports_dir, exist_ok=True)
 
     def create_session(self, sku: str) -> str:
+        # Sanitize SKU to prevent path traversal
+        sku = os.path.basename(sku)
         timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S_%f")
         session_dir = os.path.join(self.reports_dir, sku, timestamp)
         os.makedirs(session_dir, exist_ok=True)

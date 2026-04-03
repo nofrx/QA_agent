@@ -33,9 +33,9 @@ def classify_issue_severity(issue_type: str, count: int) -> str:
         return "clean"
     if issue_type == "flipped_normals":
         return "critical" if count > 50 else "warning" if count > 5 else "info"
-    if issue_type in ("negative_uv", "negative_uv_count"):
+    if issue_type == "negative_uv":
         return "critical"  # Always critical — prevents baking
-    if issue_type in ("out_of_range_uv", "out_of_range_uv_count"):
+    if issue_type == "out_of_range_uv":
         return "warning"
     if issue_type == "non_manifold":
         return "critical" if count > 100 else "warning" if count > 10 else "info"
@@ -118,7 +118,7 @@ def generate_report(
     issue_renders, screenshots, template_dir
 ):
     """Generate an HTML QA report with embedded images."""
-    env = Environment(loader=FileSystemLoader(template_dir))
+    env = Environment(loader=FileSystemLoader(template_dir), autoescape=True)
     env.filters['b64'] = image_to_base64
     template = env.get_template("report_template.html")
 

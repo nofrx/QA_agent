@@ -24,6 +24,8 @@ app.mount("/static", StaticFiles(directory=frontend_dir), name="static")
 jobs: dict[str, dict] = {}
 # Map SKU to latest job_id for SSE lookup
 sku_to_job: dict[str, str] = {}
+# Keep max 50 completed jobs in memory
+MAX_JOBS = 50
 
 
 @app.get("/")
@@ -37,7 +39,13 @@ async def reports_page():
 
 
 def _create_job(sku: str) -> str:
-    """Create a new job and return its ID."""
+    """Create a new job and return its ID. Prunes old completed jobs."""
+    # Prune old completed jobs to prevent memory leak
+    completed = [k for k, v in jobs.items() if v["status"] in ("complete", "error")]
+    if len(completed) > MAX_JOBS:
+        for old_id in completed[:len(completed) - MAX_JOBS]:
+            jobs.pop(old_id, None)
+
     job_id = f"{sku}_{uuid.uuid4().hex[:8]}"
     jobs[job_id] = {"status": "running", "messages": [], "result": None, "session_dir": None, "sku": sku}
     sku_to_job[sku] = job_id
@@ -69,7 +77,8 @@ async def start_analysis(sku: str):
             jobs[job_id]["status"] = "error"
             jobs[job_id]["messages"].append(f"Error: {str(e)}")
 
-    asyncio.create_task(run())
+    task = asyncio.create_task(run())
+    jobs[job_id]["_task"] = task  # prevent GC collection
     return {"job_id": job_id, "sku": sku, "status": "started"}
 
 
@@ -133,18 +142,18 @@ async def start_analysis_urls(req: UrlAnalysisRequest):
             jobs[job_id]["status"] = "error"
             jobs[job_id]["messages"].append(f"Error: {str(e)}")
 
-    asyncio.create_task(run())
+    task = asyncio.create_task(run())
+    jobs[job_id]["_task"] = task
     return {"job_id": job_id, "sku": sku, "status": "started"}
 
 
 @app.get("/api/status/{job_id}")
 async def job_status(job_id: str):
     """SSE stream of progress for a job. Accepts job_id or SKU."""
-    # Support both job_id and SKU lookup
-    job_id = job_id.strip().upper()
+    job_id = job_id.strip()
     if job_id not in jobs:
-        # Try looking up by SKU
-        mapped = sku_to_job.get(job_id)
+        # Try looking up by SKU (uppercase for SKU matching)
+        mapped = sku_to_job.get(job_id.upper())
         if mapped:
             job_id = mapped
 
