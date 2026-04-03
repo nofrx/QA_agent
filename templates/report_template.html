@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QA Report - {{ sku }}</title>
+<style>
+  :root {
+    --bg-primary: #1a1a2e;
+    --bg-secondary: #16213e;
+    --bg-card: #1f2b47;
+    --bg-hover: #253555;
+    --text-primary: #e0e0e0;
+    --text-secondary: #a0a8b8;
+    --accent: #4fc3f7;
+    --accent-dim: #2980b9;
+    --success: #66bb6a;
+    --warning: #ffa726;
+    --danger: #ef5350;
+    --border: #2d3e5e;
+    --radius: 8px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    line-height: 1.6;
+    padding: 0;
+  }
+
+  .container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 24px;
+  }
+
+  /* Header */
+  .header {
+    background: linear-gradient(135deg, #0f3460, #16213e);
+    border-bottom: 2px solid var(--accent-dim);
+    padding: 32px 0;
+    margin-bottom: 32px;
+  }
+  .header .container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  .header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: -0.5px;
+  }
+  .header h1 span { color: var(--accent); }
+  .header-meta {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+  .header-meta .meta-item {
+    text-align: right;
+  }
+  .header-meta .meta-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-secondary);
+  }
+  .header-meta .meta-value {
+    font-size: 16px;
+    font-weight: 600;
+    color: #fff;
+  }
+
+  /* Section */
+  .section {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 24px;
+    overflow: hidden;
+  }
+  .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 24px;
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.2s;
+  }
+  .section-header:hover { background: var(--bg-hover); }
+  .section-header h2 {
+    font-size: 18px;
+    font-weight: 600;
+  }
+  .section-toggle {
+    font-size: 20px;
+    color: var(--accent);
+    transition: transform 0.3s;
+    width: 24px;
+    text-align: center;
+  }
+  .section.collapsed .section-toggle { transform: rotate(-90deg); }
+  .section-body {
+    padding: 24px;
+    transition: max-height 0.3s ease, padding 0.3s ease;
+    overflow: hidden;
+  }
+  .section.collapsed .section-body {
+    max-height: 0;
+    padding: 0 24px;
+  }
+
+  /* Summary table */
+  .summary-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+  .summary-table th {
+    text-align: left;
+    padding: 10px 16px;
+    background: var(--bg-card);
+    border-bottom: 2px solid var(--border);
+    font-weight: 600;
+    color: var(--accent);
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .summary-table td {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-primary);
+  }
+  .summary-table tr:hover td { background: var(--bg-hover); }
+  .summary-table .label {
+    font-weight: 600;
+    color: var(--text-secondary);
+    width: 180px;
+  }
+
+  /* Stats grid */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  .stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    text-align: center;
+  }
+  .stat-value {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--accent);
+  }
+  .stat-label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+  }
+
+  /* Issue cards */
+  .issue-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 16px;
+  }
+  .issue-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .issue-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+  }
+  .issue-card-header {
+    padding: 12px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+  }
+  .issue-type {
+    font-weight: 600;
+    font-size: 14px;
+  }
+  .issue-count {
+    background: var(--danger);
+    color: #fff;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .issue-card-body { padding: 12px 16px; }
+  .issue-card-body img {
+    width: 100%;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .issue-model {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 8px;
+  }
+
+  /* Texture comparison */
+  .tex-comparison {
+    margin-bottom: 24px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .tex-comp-header {
+    padding: 12px 16px;
+    background: rgba(79,195,247,0.08);
+    border-bottom: 1px solid var(--border);
+    font-weight: 600;
+    font-size: 14px;
+  }
+  .tex-comp-body { padding: 16px; }
+  .tex-stats {
+    display: flex;
+    gap: 24px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .tex-stat {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+  }
+  .tex-stat-value {
+    font-size: 20px;
+    font-weight: 700;
+  }
+  .tex-stat-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+  }
+  .tex-images {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 12px;
+  }
+  .tex-img-wrapper {
+    position: relative;
+  }
+  .tex-img-wrapper img {
+    width: 100%;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+  .tex-img-wrapper img:hover { opacity: 0.9; }
+  .tex-img-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+  }
+
+  /* Screenshots */
+  .screenshot-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+    gap: 16px;
+  }
+  .screenshot-item img {
+    width: 100%;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    cursor: pointer;
+  }
+  .screenshot-label {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-top: 6px;
+    text-align: center;
+  }
+
+  /* Geometry detail */
+  .geo-detail {
+    margin-bottom: 16px;
+  }
+  .geo-detail h3 {
+    font-size: 15px;
+    margin-bottom: 8px;
+    color: var(--accent);
+    text-transform: capitalize;
+  }
+
+  /* Color coding for diff percentages */
+  .diff-low { color: var(--success); }
+  .diff-medium { color: var(--warning); }
+  .diff-high { color: var(--danger); }
+
+  /* Lightbox */
+  .lightbox-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.92);
+    z-index: 9999;
+    cursor: zoom-out;
+    justify-content: center;
+    align-items: center;
+    padding: 40px;
+  }
+  .lightbox-overlay.active { display: flex; }
+  .lightbox-overlay img {
+    max-width: 95%;
+    max-height: 95vh;
+    border-radius: 4px;
+    box-shadow: 0 0 60px rgba(0,0,0,0.5);
+  }
+
+  /* Footer */
+  .footer {
+    text-align: center;
+    padding: 32px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    border-top: 1px solid var(--border);
+    margin-top: 40px;
+  }
+
+  /* Badge */
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .badge-pass { background: rgba(102,187,106,0.15); color: var(--success); }
+  .badge-warn { background: rgba(255,167,38,0.15); color: var(--warning); }
+  .badge-fail { background: rgba(239,83,80,0.15); color: var(--danger); }
+
+  @media (max-width: 768px) {
+    .container { padding: 12px; }
+    .header h1 { font-size: 20px; }
+    .tex-images { grid-template-columns: 1fr; }
+    .issue-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Lightbox -->
+<div class="lightbox-overlay" id="lightbox" onclick="this.classList.remove('active')">
+  <img id="lightbox-img" src="" alt="Zoomed image">
+</div>
+
+<!-- Header -->
+<div class="header">
+  <div class="container">
+    <div>
+      <h1>Shoe QA Report <span>{{ sku }}</span></h1>
+      <div style="color: var(--text-secondary); margin-top: 4px; font-size: 14px;">
+        3D Model Quality Analysis
+      </div>
+    </div>
+    <div class="header-meta">
+      <div class="meta-item">
+        <div class="meta-label">Brand</div>
+        <div class="meta-value">{{ brand }}</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Color</div>
+        <div class="meta-value">{{ color }}</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Silhouette</div>
+        <div class="meta-value">{{ silhouette }}</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Generated</div>
+        <div class="meta-value">{{ generated_at }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- Summary Stats -->
+  <div class="section" id="section-summary">
+    <div class="section-header" onclick="toggleSection('section-summary')">
+      <h2>Summary</h2>
+      <div class="section-toggle">&#9660;</div>
+    </div>
+    <div class="section-body">
+      <table class="summary-table">
+        <thead>
+          <tr>
+            <th>Metric</th>
+            <th>Raw</th>
+            <th>Touched Up</th>
+            <th>Autoshadow</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if geometry %}
+          <tr>
+            <td class="label">Vertices</td>
+            <td>{{ geometry.get('raw', {}).get('vertices', 'N/A') }}</td>
+            <td>{{ geometry.get('touchedup', {}).get('vertices', 'N/A') }}</td>
+            <td>{{ geometry.get('autoshadow', {}).get('vertices', 'N/A') }}</td>
+          </tr>
+          <tr>
+            <td class="label">Faces</td>
+            <td>{{ geometry.get('raw', {}).get('faces', 'N/A') }}</td>
+            <td>{{ geometry.get('touchedup', {}).get('faces', 'N/A') }}</td>
+            <td>{{ geometry.get('autoshadow', {}).get('faces', 'N/A') }}</td>
+          </tr>
+          <tr>
+            <td class="label">File Size</td>
+            <td>{{ geometry.get('raw', {}).get('file_size', 'N/A') }}</td>
+            <td>{{ geometry.get('touchedup', {}).get('file_size', 'N/A') }}</td>
+            <td>{{ geometry.get('autoshadow', {}).get('file_size', 'N/A') }}</td>
+          </tr>
+          <tr>
+            <td class="label">Texture Resolution</td>
+            <td>{{ geometry.get('raw', {}).get('texture_res', 'N/A') }}</td>
+            <td>{{ geometry.get('touchedup', {}).get('texture_res', 'N/A') }}</td>
+            <td>{{ geometry.get('autoshadow', {}).get('texture_res', 'N/A') }}</td>
+          </tr>
+          <tr>
+            <td class="label">Issues Found</td>
+            <td>
+              {% set raw_issues = geometry.get('raw', {}).get('issue_count', 0) %}
+              <span class="badge {{ 'badge-pass' if raw_issues == 0 else 'badge-fail' }}">{{ raw_issues }}</span>
+            </td>
+            <td>
+              {% set tu_issues = geometry.get('touchedup', {}).get('issue_count', 0) %}
+              <span class="badge {{ 'badge-pass' if tu_issues == 0 else 'badge-fail' }}">{{ tu_issues }}</span>
+            </td>
+            <td>
+              {% set as_issues = geometry.get('autoshadow', {}).get('issue_count', 0) %}
+              <span class="badge {{ 'badge-pass' if as_issues == 0 else 'badge-fail' }}">{{ as_issues }}</span>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" style="text-align:center; color: var(--text-secondary);">No geometry data available</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Issues -->
+  {% if issues %}
+  <div class="section" id="section-issues">
+    <div class="section-header" onclick="toggleSection('section-issues')">
+      <h2>Issues ({{ issues|length }})</h2>
+      <div class="section-toggle">&#9660;</div>
+    </div>
+    <div class="section-body">
+      <div class="issue-grid">
+        {% for issue in issues %}
+        <div class="issue-card">
+          <div class="issue-card-header">
+            <span class="issue-type">{{ issue.type }}</span>
+            <span class="issue-count">{{ issue.count }}</span>
+          </div>
+          <div class="issue-card-body">
+            {% if issue.image %}
+            <img src="{{ issue.image }}" alt="{{ issue.type }}" onclick="openLightbox(this.src)">
+            {% endif %}
+            {% if issue.model %}
+            <div class="issue-model">Model: {{ issue.model }}</div>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Texture Comparisons -->
+  {% if textures %}
+  <div class="section" id="section-textures">
+    <div class="section-header" onclick="toggleSection('section-textures')">
+      <h2>Texture Comparisons</h2>
+      <div class="section-toggle">&#9660;</div>
+    </div>
+    <div class="section-body">
+      {% for tex_type, comparisons in textures.items() %}
+      <h3 style="font-size: 16px; margin-bottom: 12px; margin-top: {{ '24px' if not loop.first else '0' }}; text-transform: capitalize; color: var(--accent);">
+        {{ tex_type }}
+      </h3>
+      {% for comp_name, comp in comparisons.items() %}
+      <div class="tex-comparison">
+        <div class="tex-comp-header">
+          {{ comp_name | replace('_', ' ') | title }}
+        </div>
+        <div class="tex-comp-body">
+          <div class="tex-stats">
+            <div class="tex-stat">
+              <span class="tex-stat-value {{ 'diff-low' if comp.pct_changed < 5 else ('diff-medium' if comp.pct_changed < 20 else 'diff-high') }}">
+                {{ comp.pct_changed }}%
+              </span>
+              <span class="tex-stat-label">Changed</span>
+            </div>
+            <div class="tex-stat">
+              <span class="tex-stat-value">{{ comp.max_diff }}</span>
+              <span class="tex-stat-label">Max Diff</span>
+            </div>
+            <div class="tex-stat">
+              <span class="tex-stat-value">{{ comp.mean_diff }}</span>
+              <span class="tex-stat-label">Mean Diff</span>
+            </div>
+          </div>
+          <div class="tex-images">
+            {% if comp.side_by_side %}
+            <div class="tex-img-wrapper">
+              <div class="tex-img-label">Side by Side</div>
+              <img src="{{ comp.side_by_side }}" alt="Side by side" onclick="openLightbox(this.src)">
+            </div>
+            {% endif %}
+            {% if comp.heatmap %}
+            <div class="tex-img-wrapper">
+              <div class="tex-img-label">Heatmap</div>
+              <img src="{{ comp.heatmap }}" alt="Heatmap" onclick="openLightbox(this.src)">
+            </div>
+            {% endif %}
+            {% if comp.overlay %}
+            <div class="tex-img-wrapper">
+              <div class="tex-img-label">Overlay</div>
+              <img src="{{ comp.overlay }}" alt="Overlay" onclick="openLightbox(this.src)">
+            </div>
+            {% endif %}
+          </div>
+          {% if comp.regions %}
+          <div style="margin-top: 12px; font-size: 13px; color: var(--text-secondary);">
+            Changed regions:
+            {% for r in comp.regions %}
+              <span class="badge badge-warn">{{ r.x }},{{ r.y }} ({{ r.w }}x{{ r.h }})</span>
+            {% endfor %}
+          </div>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Geometry Details -->
+  {% if geometry %}
+  <div class="section collapsed" id="section-geometry">
+    <div class="section-header" onclick="toggleSection('section-geometry')">
+      <h2>Geometry Details</h2>
+      <div class="section-toggle">&#9660;</div>
+    </div>
+    <div class="section-body">
+      {% for model_name, model_data in geometry.items() %}
+      <div class="geo-detail">
+        <h3>{{ model_name }}</h3>
+        <table class="summary-table">
+          <tbody>
+            {% for key, value in model_data.items() %}
+            <tr>
+              <td class="label">{{ key | replace('_', ' ') | title }}</td>
+              <td>
+                {% if value is mapping %}
+                  <pre style="font-size: 12px; color: var(--text-secondary); white-space: pre-wrap;">{{ value | tojson(indent=2) }}</pre>
+                {% elif value is iterable and value is not string %}
+                  {{ value | join(', ') }}
+                {% else %}
+                  {{ value }}
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Screenshots -->
+  {% if screenshots %}
+  <div class="section" id="section-screenshots">
+    <div class="section-header" onclick="toggleSection('section-screenshots')">
+      <h2>Screenshots</h2>
+      <div class="section-toggle">&#9660;</div>
+    </div>
+    <div class="section-body">
+      <div class="screenshot-grid">
+        {% for name, img_data in screenshots.items() %}
+        {% if img_data %}
+        <div class="screenshot-item">
+          <img src="{{ img_data }}" alt="{{ name }}" onclick="openLightbox(this.src)">
+          <div class="screenshot-label">{{ name | replace('_', ' ') | title }}</div>
+        </div>
+        {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+
+<!-- Footer -->
+<div class="footer">
+  Shoe QA Report &middot; {{ sku }} &middot; Generated {{ generated_at }}
+</div>
+
+<script>
+function toggleSection(id) {
+  var el = document.getElementById(id);
+  if (el) el.classList.toggle('collapsed');
+}
+
+function openLightbox(src) {
+  var lb = document.getElementById('lightbox');
+  var img = document.getElementById('lightbox-img');
+  img.src = src;
+  lb.classList.add('active');
+}
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    document.getElementById('lightbox').classList.remove('active');
+  }
+});
+</script>
+</body>
+</html>
