@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 import os
+import re
 import httpx
+
 
 @dataclass
 class ScanData:
@@ -13,24 +15,19 @@ class ScanData:
     autoshadow_filename: str
     scan_id: str = ""
 
-def extract_sku_files(scan: dict) -> ScanData:
-    product = scan.get("product", {})
-    sku = product.get("modelCode", "")
-    for tag in product.get("clientTags", []):
-        if tag.get("key") == "clientSku":
-            sku = tag["value"]
-            break
+
+def extract_from_asset(asset: dict, sku: str) -> ScanData:
+    """Extract GLB filenames from an asset's canonicalAsset (product) data."""
+    product = asset.get("canonicalAsset", {})
     brand = product.get("brand", "Unknown")
     color = product.get("color", "Unknown")
     silhouette = product.get("silhouette", "Unknown")
-    raw_scan_filename = scan.get("glbFilename", "")
 
     versions = product.get("versions", [])
     if not versions:
         raise ValueError(f"No published version found for {sku}")
 
-    touchedup = None
-    autoshadow = None
+    # Search versions in reverse (latest first) for left shoe touch-up
     for version in reversed(versions):
         for file_entry in version.get("files", []):
             if file_entry.get("laterality") != "left" or file_entry.get("type") != "3d":
@@ -43,50 +40,90 @@ def extract_sku_files(scan: dict) -> ScanData:
             if not iterations:
                 continue
             latest = iterations[-1]
+            source = latest.get("sourceFilename")
             touchedup = latest.get("previewFilename")
             autoshadow = latest.get("autoShadowFilename")
-            if touchedup and autoshadow:
-                break
-        if touchedup and autoshadow:
-            break
+            if touchedup and autoshadow and source:
+                return ScanData(
+                    sku=sku, brand=brand, color=color, silhouette=silhouette,
+                    raw_scan_filename=source,
+                    touchedup_filename=touchedup,
+                    autoshadow_filename=autoshadow,
+                )
 
-    if not touchedup or not autoshadow:
-        raise ValueError(f"No published version with touch-up data found for {sku}")
+    raise ValueError(f"No touch-up iteration with all 3 files found for {sku}")
 
-    return ScanData(sku=sku, brand=brand, color=color, silhouette=silhouette,
-                    raw_scan_filename=raw_scan_filename, touchedup_filename=touchedup,
-                    autoshadow_filename=autoshadow, scan_id=scan.get("id", ""))
 
 async def find_scan_by_sku(api_base: str, api_key: str, sku: str) -> ScanData:
-    """Try API key first, fall back to Playwright browser session."""
-    # Try API key auth
+    """Find scan data for a SKU. Tries API key, then Chrome AppleScript."""
+    # Try API key auth first
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.get(f"{api_base}/scans",
-                                    headers={"x-api-key": api_key},
-                                    params={"search": sku})
+            resp = await client.get(
+                f"{api_base}/scans",
+                headers={"x-api-key": api_key},
+                params={"search": sku}
+            )
             resp.raise_for_status()
             data = resp.json()
-            return _find_sku_in_docs(data.get("docs", []), sku)
+            return _find_sku_in_scan_docs(data.get("docs", []), sku)
     except Exception:
         pass
 
-    # Fall back to Playwright with Chrome session
-    return await find_scan_by_sku_cdp(api_base, sku)
+    # Fall back to Chrome AppleScript via assets API
+    return await find_scan_by_sku_chrome(api_base, sku)
 
-async def find_scan_by_sku_cdp(api_base: str, sku: str) -> ScanData:
-    """Use AppleScript + Chrome to fetch scan data via sync XHR in a dashboard tab."""
+
+async def find_scan_by_sku_chrome(api_base: str, sku: str) -> ScanData:
+    """Use AppleScript + Chrome to search assets API and extract GLB data."""
     import json as json_mod
     import subprocess
     import tempfile
 
-    # Sanitize SKU — only allow alphanumeric, dash, underscore
-    import re
     safe_sku = re.sub(r"[^A-Za-z0-9\-_]", "", sku)
     if not safe_sku:
         raise ValueError(f"Invalid SKU: {sku}")
 
-    # Write AppleScript to temp file — use single quotes inside JS to avoid AppleScript quote conflicts
+    # JavaScript that:
+    # 1. Paginates through /api/assets (200 per page, up to 100 pages = 20K assets)
+    # 2. Finds asset with matching sku field
+    # 3. Extracts GLB filenames from the canonicalAsset's latest version
+    js_code = (
+        "var sku='" + safe_sku + "';"
+        "var found=null;"
+        "for(var p=1;p<=100;p++){"
+        "var x=new XMLHttpRequest();"
+        "x.open('GET','/api/assets?limit=200&page='+p,false);"
+        "x.send();"
+        "if(x.status!==200)break;"
+        "var d=JSON.parse(x.responseText);"
+        "for(var i=0;i<d.docs.length;i++){"
+        "if(d.docs[i].sku===sku){found=d.docs[i];break;}}"
+        "if(found||!d.hasNextPage)break;}"
+        "if(!found){'NOT_FOUND';}else{"
+        "var cp=found.canonicalAsset;"
+        "var vs=cp.versions||[];"
+        "var result=null;"
+        "for(var vi=vs.length-1;vi>=0;vi--){"
+        "var files=vs[vi].files||[];"
+        "for(var fi=0;fi<files.length;fi++){"
+        "var f=files[fi];"
+        "if(f.laterality==='left'&&f.type==='3d'&&f.task&&f.task.three"
+        "&&f.task.three.method==='covision_scan_touch_up'){"
+        "var its=f.task.three.iterations||[];"
+        "if(its.length>0){"
+        "var last=its[its.length-1];"
+        "result=JSON.stringify({"
+        "sku:sku,source:last.sourceFilename||'',"
+        "touchedup:last.previewFilename||'',"
+        "autoshadow:last.autoShadowFilename||'',"
+        "brand:cp.brand||'',color:cp.color||'',"
+        "silhouette:cp.silhouette||''});"
+        "break;}}}"
+        "if(result)break;}"
+        "result||'NO_TOUCHUP';}"
+    )
+
     applescript = (
         'tell application "Google Chrome"\n'
         '    set windowCount to count of windows\n'
@@ -95,7 +132,7 @@ async def find_scan_by_sku_cdp(api_base: str, sku: str) -> ScanData:
         '        repeat with i from 1 to tabCount\n'
         '            set tabURL to URL of tab i of window w\n'
         '            if tabURL contains "dashboard.shopar.ai" then\n'
-        '                set jsCode to "var x=new XMLHttpRequest();x.open(\'GET\',\'/api/scans?search=' + safe_sku + '\',false);x.send();x.status===200?x.responseText:\'ERROR:\'+x.status;"\n'
+        '                set jsCode to "' + js_code + '"\n'
         '                set jsResult to execute tab i of window w javascript jsCode\n'
         '                return jsResult\n'
         '            end if\n'
@@ -105,7 +142,6 @@ async def find_scan_by_sku_cdp(api_base: str, sku: str) -> ScanData:
         'end tell'
     )
 
-    # Write to temp file
     with tempfile.NamedTemporaryFile(mode='w', suffix='.scpt', delete=False) as f:
         f.write(applescript)
         script_path = f.name
@@ -113,42 +149,97 @@ async def find_scan_by_sku_cdp(api_base: str, sku: str) -> ScanData:
     try:
         result = subprocess.run(
             ["osascript", script_path],
-            capture_output=True, text=True, timeout=15
+            capture_output=True, text=True, timeout=120  # Allow time for pagination
         )
         output = result.stdout.strip()
 
         if result.returncode != 0:
-            stderr = result.stderr.strip()
-            raise ValueError(f"AppleScript failed: {stderr[:200]}")
+            raise ValueError(f"Chrome script failed: {result.stderr.strip()[:200]}")
 
         if not output or output == "NO_DASHBOARD_TAB":
             raise ValueError(
                 "No dashboard.shopar.ai tab found in Chrome. "
-                "Please open the dashboard in Chrome first."
+                "Open the dashboard in Chrome and try again."
             )
 
-        if output.startswith("ERROR:"):
-            raise ValueError(f"Dashboard API returned {output}")
+        if output == "NOT_FOUND":
+            raise ValueError(
+                f"SKU {sku} not found in dashboard assets. "
+                "Check the SKU is correct (e.g., F5714D05U-K11)."
+            )
+
+        if output == "NO_TOUCHUP":
+            raise ValueError(
+                f"SKU {sku} found but has no touch-up data yet. "
+                "The model may not have been processed."
+            )
 
         data = json_mod.loads(output)
-        return _find_sku_in_docs(data.get("docs", []), sku)
+        return ScanData(
+            sku=data["sku"],
+            brand=data.get("brand", "Unknown"),
+            color=data.get("color", "Unknown"),
+            silhouette=data.get("silhouette", "Unknown"),
+            raw_scan_filename=data["source"],
+            touchedup_filename=data["touchedup"],
+            autoshadow_filename=data["autoshadow"],
+        )
 
     except json_mod.JSONDecodeError:
-        raise ValueError(f"Invalid response from dashboard: {output[:200]}")
+        raise ValueError(f"Invalid response from Chrome: {output[:200]}")
     except subprocess.TimeoutExpired:
-        raise ValueError("Chrome AppleScript timed out")
+        raise ValueError("Chrome lookup timed out. The dashboard may be slow.")
     finally:
         os.unlink(script_path)
 
-def _find_sku_in_docs(docs: list, sku: str) -> ScanData:
-    """Find matching left-shoe scan in API response docs."""
+
+def _find_sku_in_scan_docs(docs: list, sku: str) -> ScanData:
+    """Find matching left-shoe scan in /api/scans response docs."""
     for scan in docs:
         if scan.get("laterality") != "left":
             continue
         product = scan.get("product", {})
         for tag in product.get("clientTags", []):
             if tag.get("key") == "clientSku" and tag.get("value", "").upper() == sku.upper():
-                return extract_sku_files(scan)
+                return _extract_from_scan(scan, sku)
         if product.get("modelCode", "").upper() == sku.upper():
-            return extract_sku_files(scan)
+            return _extract_from_scan(scan, sku)
     raise ValueError(f"No scan found for SKU: {sku}")
+
+
+def _extract_from_scan(scan: dict, sku: str) -> ScanData:
+    """Extract data from a /api/scans document (legacy format)."""
+    product = scan.get("product", {})
+    brand = product.get("brand", "Unknown")
+    color = product.get("color", "Unknown")
+    silhouette = product.get("silhouette", "Unknown")
+
+    versions = product.get("versions", [])
+    if not versions:
+        raise ValueError(f"No published version found for {sku}")
+
+    for version in reversed(versions):
+        for file_entry in version.get("files", []):
+            if file_entry.get("laterality") != "left" or file_entry.get("type") != "3d":
+                continue
+            task = file_entry.get("task", {})
+            three = task.get("three", {})
+            if three.get("method") != "covision_scan_touch_up":
+                continue
+            iterations = three.get("iterations", [])
+            if not iterations:
+                continue
+            latest = iterations[-1]
+            source = latest.get("sourceFilename", scan.get("glbFilename", ""))
+            touchedup = latest.get("previewFilename")
+            autoshadow = latest.get("autoShadowFilename")
+            if touchedup and autoshadow:
+                return ScanData(
+                    sku=sku, brand=brand, color=color, silhouette=silhouette,
+                    raw_scan_filename=source,
+                    touchedup_filename=touchedup,
+                    autoshadow_filename=autoshadow,
+                    scan_id=scan.get("id", ""),
+                )
+
+    raise ValueError(f"No touch-up data found for {sku}")
