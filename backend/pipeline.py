@@ -17,10 +17,14 @@ async def run_qa_pipeline(
     on_progress: Callable[[str], Awaitable[None]] = None,
     urls: dict = None,
     metadata: dict = None,
+    local_files: dict = None,
+    session_dir_override: str = None,
 ):
-    """Run QA pipeline. If urls dict provided, skip API lookup and download directly.
-    urls format: {"raw": "cloudfront_url", "touchedup": "cloudfront_url", "autoshadow": "cloudfront_url"}
-    metadata format: {"brand": "...", "color": "...", "silhouette": "..."}
+    """Run QA pipeline.
+    Modes:
+    - auto: look up SKU on dashboard, download from CloudFront
+    - urls: download from provided CloudFront URLs
+    - local_files: use already-saved local GLB files ({"raw": path, "touchedup": path, "autoshadow": path})
     """
     storage = Storage(config.reports_dir)
 
@@ -34,11 +38,32 @@ async def run_qa_pipeline(
     if metadata:
         scan_info.update({k: v for k, v in metadata.items() if v and v != "Unknown"})
 
-    if urls:
+    if local_files:
+        # Local file mode — files already on disk
+        session_dir = session_dir_override or storage.create_session(sku)
+        raw_path = local_files["raw"]
+        touchedup_path = local_files["touchedup"]
+        autoshadow_path = local_files["autoshadow"]
+    elif urls:
         # Direct URL mode — skip API lookup
         await progress(f"Using provided URLs for {sku}")
+        session_dir = session_dir_override or storage.create_session(sku)
+        raw_path = os.path.join(session_dir, "raw_scan.glb")
+        touchedup_path = os.path.join(session_dir, "touched_up.glb")
+        autoshadow_path = os.path.join(session_dir, "autoshadow.glb")
+
+        await progress("Downloading 3 models from CloudFront...")
+        for label, url_key, out_path in [
+            ("raw scan", "raw", raw_path),
+            ("touched-up", "touchedup", touchedup_path),
+            ("autoshadow", "autoshadow", autoshadow_path),
+        ]:
+            try:
+                await download_and_decrypt(urls[url_key], out_path, progress)
+            except Exception as e:
+                raise ValueError(f"Failed to download {label}: {e}")
     else:
-        # API mode — try to look up scan data
+        # API mode — look up scan data
         try:
             await progress(f"Looking up SKU {sku} on dashboard...")
             scan_data = await find_scan_by_sku(config.dashboard_api, config.api_key, sku)
@@ -52,24 +77,21 @@ async def run_qa_pipeline(
         except Exception as e:
             raise ValueError(f"API lookup failed: {e}. Use URL mode instead.")
 
-    # Step 2: Create session
-    session_dir = storage.create_session(sku)
+        session_dir = session_dir_override or storage.create_session(sku)
+        raw_path = os.path.join(session_dir, "raw_scan.glb")
+        touchedup_path = os.path.join(session_dir, "touched_up.glb")
+        autoshadow_path = os.path.join(session_dir, "autoshadow.glb")
 
-    # Step 3: Download & decrypt from URLs
-    raw_path = os.path.join(session_dir, "raw_scan.glb")
-    touchedup_path = os.path.join(session_dir, "touched_up.glb")
-    autoshadow_path = os.path.join(session_dir, "autoshadow.glb")
-
-    await progress("Downloading 3 models from CloudFront...")
-    for label, url_key, out_path in [
-        ("raw scan", "raw", raw_path),
-        ("touched-up", "touchedup", touchedup_path),
-        ("autoshadow", "autoshadow", autoshadow_path),
-    ]:
-        try:
-            await download_and_decrypt(urls[url_key], out_path, progress)
-        except Exception as e:
-            raise ValueError(f"Failed to download {label}: {e}")
+        await progress("Downloading 3 models from CloudFront...")
+        for label, url_key, out_path in [
+            ("raw scan", "raw", raw_path),
+            ("touched-up", "touchedup", touchedup_path),
+            ("autoshadow", "autoshadow", autoshadow_path),
+        ]:
+            try:
+                await download_and_decrypt(urls[url_key], out_path, progress)
+            except Exception as e:
+                raise ValueError(f"Failed to download {label}: {e}")
 
     # Step 4: Geometry analysis (run in thread to avoid blocking event loop)
     loop = asyncio.get_event_loop()

@@ -2,7 +2,7 @@ import asyncio
 import os
 import json
 import uuid
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -138,6 +138,66 @@ async def start_analysis_urls(req: UrlAnalysisRequest):
             jobs[job_id]["status"] = "complete"
             jobs[job_id]["result"] = report_path
             jobs[job_id]["session_dir"] = session_dir
+        except Exception as e:
+            jobs[job_id]["status"] = "error"
+            jobs[job_id]["messages"].append(f"Error: {str(e)}")
+
+    task = asyncio.create_task(run())
+    jobs[job_id]["_task"] = task
+    return {"job_id": job_id, "sku": sku, "status": "started"}
+
+
+@app.post("/api/analyze-files")
+async def start_analysis_files(
+    sku: str = Form(...),
+    raw_file: UploadFile = File(...),
+    touchedup_file: UploadFile = File(...),
+    autoshadow_file: UploadFile = File(...),
+):
+    """Start QA analysis using locally uploaded GLB files."""
+    sku = sku.strip().upper()
+    if not sku:
+        raise HTTPException(400, "SKU is required")
+
+    existing = sku_to_job.get(sku)
+    if existing and jobs.get(existing, {}).get("status") == "running":
+        raise HTTPException(400, f"Analysis already running for {sku}")
+
+    job_id = _create_job(sku)
+
+    # Save uploaded files to a temp session dir
+    session_dir = storage.create_session(sku)
+    file_paths = {}
+    for label, upload, filename in [
+        ("raw", raw_file, "raw_scan.glb"),
+        ("touchedup", touchedup_file, "touched_up.glb"),
+        ("autoshadow", autoshadow_file, "autoshadow.glb"),
+    ]:
+        path = os.path.join(session_dir, filename)
+        content = await upload.read()
+        with open(path, "wb") as f:
+            f.write(content)
+        file_paths[label] = path
+
+    async def run():
+        try:
+            async def on_progress(msg):
+                jobs[job_id]["messages"].append(msg)
+
+            await on_progress(f"Using uploaded files for {sku}")
+            await on_progress(f"  raw scan: {os.path.getsize(file_paths['raw']) / 1024 / 1024:.1f} MB")
+            await on_progress(f"  touched-up: {os.path.getsize(file_paths['touchedup']) / 1024 / 1024:.1f} MB")
+            await on_progress(f"  autoshadow: {os.path.getsize(file_paths['autoshadow']) / 1024 / 1024:.1f} MB")
+
+            # Run pipeline with local_files instead of urls
+            report_path, sess_dir = await run_qa_pipeline(
+                config, sku, on_progress,
+                local_files=file_paths,
+                session_dir_override=session_dir,
+            )
+            jobs[job_id]["status"] = "complete"
+            jobs[job_id]["result"] = report_path
+            jobs[job_id]["session_dir"] = sess_dir
         except Exception as e:
             jobs[job_id]["status"] = "error"
             jobs[job_id]["messages"].append(f"Error: {str(e)}")

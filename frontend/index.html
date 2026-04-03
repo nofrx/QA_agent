@@ -21,14 +21,13 @@
     </div>
 
     <div class="mode-hint" style="max-width:600px;margin:-20px auto 20px;text-align:right;">
-      <a href="#" onclick="event.preventDefault();document.getElementById('mode-section').style.display='';toggleUrlMode();updateSnippet();" style="font-size:0.75rem;color:var(--text-secondary);text-decoration:none;">manual URL mode</a>
+      <a href="#" onclick="event.preventDefault();showMode('url')" style="font-size:0.75rem;color:var(--text-secondary);text-decoration:none;margin-right:12px;">paste URLs</a>
+      <a href="#" onclick="event.preventDefault();showMode('file')" style="font-size:0.75rem;color:var(--text-secondary);text-decoration:none;">upload local files</a>
     </div>
-    <div class="mode-section" id="mode-section" style="display:none;">
-      <label class="mode-toggle">
-        <input type="checkbox" id="url-mode-toggle" onchange="toggleUrlMode()" checked>
-        <span>Paste URLs manually</span>
-      </label>
-      <div class="url-fields" id="url-fields" style="display:none;">
+
+    <div class="mode-section" id="url-mode-section" style="display:none;">
+      <div class="mode-label">Paste CloudFront URLs</div>
+      <div class="url-fields">
         <input type="text" id="raw-url" placeholder="Raw scan GLB URL" autocomplete="off">
         <input type="text" id="touchedup-url" placeholder="Touched-up GLB URL" autocomplete="off">
         <input type="text" id="autoshadow-url" placeholder="AutoShadow GLB URL" autocomplete="off">
@@ -39,6 +38,27 @@
           <textarea id="json-paste" placeholder='Paste JSON output here...' rows="2"></textarea>
           <button class="btn-small" onclick="parseJsonPaste()">Fill URLs</button>
         </details>
+      </div>
+    </div>
+
+    <div class="mode-section" id="file-mode-section" style="display:none;">
+      <div class="mode-label">Upload local GLB files</div>
+      <div class="file-fields">
+        <label class="file-input-label">
+          Raw scan GLB
+          <input type="file" id="raw-file" accept=".glb" onchange="updateFileLabel(this)">
+          <span class="file-name" id="raw-file-name">No file chosen</span>
+        </label>
+        <label class="file-input-label">
+          Touched-up GLB
+          <input type="file" id="touchedup-file" accept=".glb" onchange="updateFileLabel(this)">
+          <span class="file-name" id="touchedup-file-name">No file chosen</span>
+        </label>
+        <label class="file-input-label">
+          AutoShadow GLB
+          <input type="file" id="autoshadow-file" accept=".glb" onchange="updateFileLabel(this)">
+          <span class="file-name" id="autoshadow-file-name">No file chosen</span>
+        </label>
       </div>
     </div>
 

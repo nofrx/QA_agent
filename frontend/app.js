@@ -1,12 +1,28 @@
 // Shoe QA Frontend
 
-function toggleUrlMode() {
-  const fields = document.getElementById('url-fields');
-  const toggle = document.getElementById('url-mode-toggle');
-  if (fields && toggle) {
-    fields.style.display = toggle.checked ? 'block' : 'none';
-    if (toggle.checked) updateSnippet();
+var currentMode = 'auto'; // 'auto', 'url', 'file'
+
+function showMode(mode) {
+  currentMode = mode;
+  var urlSection = document.getElementById('url-mode-section');
+  var fileSection = document.getElementById('file-mode-section');
+  if (urlSection) urlSection.style.display = mode === 'url' ? 'block' : 'none';
+  if (fileSection) fileSection.style.display = mode === 'file' ? 'block' : 'none';
+  if (mode === 'url') updateSnippet();
+}
+
+function updateFileLabel(input) {
+  var nameSpan = input.nextElementSibling;
+  if (nameSpan && input.files.length > 0) {
+    var f = input.files[0];
+    nameSpan.textContent = f.name + ' (' + (f.size / 1024 / 1024).toFixed(1) + ' MB)';
+    nameSpan.style.color = 'var(--success)';
   }
+}
+
+function toggleUrlMode() {
+  // Legacy compat — just show URL mode
+  showMode('url');
 }
 
 function updateSnippet() {
@@ -87,10 +103,8 @@ function analyzeSku() {
   progressSection.classList.add('active');
   progressHeader.innerHTML = '<div class="spinner"></div><span>Analyzing ' + escapeHtml(sku.toUpperCase()) + '...</span>';
 
-  const urlMode = document.getElementById('url-mode-toggle') && document.getElementById('url-mode-toggle').checked;
-
   let fetchPromise;
-  if (urlMode) {
+  if (currentMode === 'url') {
     const rawUrl = document.getElementById('raw-url').value.trim();
     const touchedupUrl = document.getElementById('touchedup-url').value.trim();
     const autoshadowUrl = document.getElementById('autoshadow-url').value.trim();
@@ -108,6 +122,26 @@ function analyzeSku() {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ sku, raw_url: rawUrl, touchedup_url: touchedupUrl, autoshadow_url: autoshadowUrl })
     });
+  } else if (currentMode === 'file') {
+    const rawFile = document.getElementById('raw-file').files[0];
+    const touchedupFile = document.getElementById('touchedup-file').files[0];
+    const autoshadowFile = document.getElementById('autoshadow-file').files[0];
+
+    if (!rawFile || !touchedupFile || !autoshadowFile) {
+      btn.disabled = false;
+      progressSection.classList.remove('active');
+      errorCard.querySelector('p').textContent = 'Please select all 3 GLB files.';
+      errorCard.classList.add('active');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('sku', sku);
+    formData.append('raw_file', rawFile);
+    formData.append('touchedup_file', touchedupFile);
+    formData.append('autoshadow_file', autoshadowFile);
+
+    fetchPromise = fetch('/api/analyze-files', { method: 'POST', body: formData });
   } else {
     fetchPromise = fetch('/api/analyze/' + encodeURIComponent(sku), { method: 'POST' });
   }
@@ -141,14 +175,9 @@ function analyzeSku() {
           var errMsg = humanizeError(data.message);
           errorCard.querySelector('p').textContent = errMsg;
           errorCard.classList.add('active');
-          // Show URL mode as fallback if auto-lookup failed
+          // Show URL/file mode as fallback if auto-lookup failed
           if (errMsg.indexOf('not found') >= 0 || errMsg.indexOf('URL mode') >= 0 || errMsg.indexOf('dashboard') >= 0) {
-            var modeSection = document.getElementById('mode-section');
-            if (modeSection) {
-              modeSection.style.display = '';
-              toggleUrlMode();
-              updateSnippet();
-            }
+            showMode('url');
           }
         }
       };
