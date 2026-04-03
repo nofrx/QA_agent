@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shoe QA</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Shoe <span>QA</span></h1>
+      <p>3D model quality analysis pipeline</p>
+      <a href="/reports" class="nav-link">Reports Library</a>
+    </header>
+
+    <div class="search-section">
+      <input type="text" id="sku-input" placeholder="Enter SKU (e.g., F5714D05U-K11)" autocomplete="off" spellcheck="false">
+      <button class="btn" id="analyze-btn" onclick="analyzeSku()">Analyze</button>
+    </div>
+
+    <div class="progress-section" id="progress-section">
+      <div class="progress-header" id="progress-header">
+        <div class="spinner"></div>
+        <span>Analyzing...</span>
+      </div>
+      <div class="progress-feed" id="progress-feed"></div>
+    </div>
+
+    <div class="result-section" id="result-section"></div>
+
+    <div class="error-card" id="error-card">
+      <h3>Analysis Failed</h3>
+      <p></p>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
