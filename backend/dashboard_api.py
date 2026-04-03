@@ -80,6 +80,12 @@ async def find_scan_by_sku_cdp(api_base: str, sku: str) -> ScanData:
     import subprocess
     import tempfile
 
+    # Sanitize SKU — only allow alphanumeric, dash, underscore
+    import re
+    safe_sku = re.sub(r"[^A-Za-z0-9\-_]", "", sku)
+    if not safe_sku:
+        raise ValueError(f"Invalid SKU: {sku}")
+
     # Write AppleScript to temp file — use single quotes inside JS to avoid AppleScript quote conflicts
     applescript = (
         'tell application "Google Chrome"\n'
@@ -89,7 +95,7 @@ async def find_scan_by_sku_cdp(api_base: str, sku: str) -> ScanData:
         '        repeat with i from 1 to tabCount\n'
         '            set tabURL to URL of tab i of window w\n'
         '            if tabURL contains "dashboard.shopar.ai" then\n'
-        '                set jsCode to "var x=new XMLHttpRequest();x.open(\'GET\',\'/api/scans?search=' + sku + '\',false);x.send();x.status===200?x.responseText:\'ERROR:\'+x.status;"\n'
+        '                set jsCode to "var x=new XMLHttpRequest();x.open(\'GET\',\'/api/scans?search=' + safe_sku + '\',false);x.send();x.status===200?x.responseText:\'ERROR:\'+x.status;"\n'
         '                set jsResult to execute tab i of window w javascript jsCode\n'
         '                return jsResult\n'
         '            end if\n'
