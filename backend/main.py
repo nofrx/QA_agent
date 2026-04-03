@@ -124,7 +124,8 @@ async def start_analysis_urls(req: UrlAnalysisRequest):
         try:
             async def on_progress(msg):
                 jobs[job_id]["messages"].append(msg)
-            report_path, session_dir = await run_qa_pipeline(config, sku, on_progress, urls=urls)
+            meta = {"brand": req.brand, "color": req.color, "silhouette": req.silhouette}
+            report_path, session_dir = await run_qa_pipeline(config, sku, on_progress, urls=urls, metadata=meta)
             jobs[job_id]["status"] = "complete"
             jobs[job_id]["result"] = report_path
             jobs[job_id]["session_dir"] = session_dir

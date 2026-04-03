@@ -14,10 +14,12 @@ from backend.storage import Storage
 async def run_qa_pipeline(
     config: Config, sku: str,
     on_progress: Callable[[str], Awaitable[None]] = None,
-    urls: dict = None
+    urls: dict = None,
+    metadata: dict = None,
 ):
     """Run QA pipeline. If urls dict provided, skip API lookup and download directly.
     urls format: {"raw": "cloudfront_url", "touchedup": "cloudfront_url", "autoshadow": "cloudfront_url"}
+    metadata format: {"brand": "...", "color": "...", "silhouette": "..."}
     """
     storage = Storage(config.reports_dir)
 
@@ -26,6 +28,8 @@ async def run_qa_pipeline(
             await on_progress(msg)
 
     scan_info = {"sku": sku, "brand": "Unknown", "color": "Unknown", "silhouette": "Unknown"}
+    if metadata:
+        scan_info.update({k: v for k, v in metadata.items() if v and v != "Unknown"})
 
     if urls:
         # Direct URL mode — skip API lookup
