@@ -3,8 +3,10 @@
 function toggleUrlMode() {
   const fields = document.getElementById('url-fields');
   const toggle = document.getElementById('url-mode-toggle');
-  fields.style.display = toggle.checked ? 'block' : 'none';
-  if (toggle.checked) updateSnippet();
+  if (fields && toggle) {
+    fields.style.display = toggle.checked ? 'block' : 'none';
+    if (toggle.checked) updateSnippet();
+  }
 }
 
 function updateSnippet() {
@@ -136,8 +138,18 @@ function analyzeSku() {
           btn.disabled = false;
           progressHeader.innerHTML = '<span style="color:var(--danger)">Analysis failed</span>';
           addProgressMsg(progressFeed, data.message, true);
-          errorCard.querySelector('p').textContent = humanizeError(data.message);
+          var errMsg = humanizeError(data.message);
+          errorCard.querySelector('p').textContent = errMsg;
           errorCard.classList.add('active');
+          // Show URL mode as fallback if auto-lookup failed
+          if (errMsg.indexOf('not found') >= 0 || errMsg.indexOf('URL mode') >= 0 || errMsg.indexOf('dashboard') >= 0) {
+            var modeSection = document.getElementById('mode-section');
+            if (modeSection) {
+              modeSection.style.display = '';
+              toggleUrlMode();
+              updateSnippet();
+            }
+          }
         }
       };
 
