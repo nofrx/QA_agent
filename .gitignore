@@ -7,3 +7,4 @@ build/
 .env
 .ralph-prompt.md
 .claude/ralph-loop.local.md
+config.json

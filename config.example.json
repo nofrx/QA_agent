@@ -1,5 +1,5 @@
 {
-  "api_key": "d4cc0dd1-99b2-43b6-b59a-7f2107146ce1",
+  "api_key": "YOUR_API_KEY_HERE",
   "cloudfront_base": "https://dj5e08oeu5ym4.cloudfront.net/3e",
   "dashboard_api": "https://dashboard.shopar.ai/api",
   "dashboard_viewer": "https://dashboard.shopar.ai/admin/viewer",
