@@ -20,10 +20,13 @@
       <button class="btn" id="analyze-btn" onclick="analyzeSku()">Analyze</button>
     </div>
 
+    <div class="mode-hint" style="max-width:600px;margin:-20px auto 20px;text-align:right;">
+      <a href="#" onclick="event.preventDefault();document.getElementById('mode-section').style.display='';toggleUrlMode();updateSnippet();" style="font-size:0.75rem;color:var(--text-secondary);text-decoration:none;">manual URL mode</a>
+    </div>
     <div class="mode-section" id="mode-section" style="display:none;">
       <label class="mode-toggle">
         <input type="checkbox" id="url-mode-toggle" onchange="toggleUrlMode()" checked>
-        <span>Paste URLs manually (auto-lookup failed)</span>
+        <span>Paste URLs manually</span>
       </label>
       <div class="url-fields" id="url-fields" style="display:none;">
         <input type="text" id="raw-url" placeholder="Raw scan GLB URL" autocomplete="off">
