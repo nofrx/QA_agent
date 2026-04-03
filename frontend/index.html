@@ -26,11 +26,11 @@
           <input type="text" id="touchedup-url" placeholder="Touched-up GLB URL (CloudFront)" autocomplete="off">
           <input type="text" id="autoshadow-url" placeholder="AutoShadow GLB URL (CloudFront)" autocomplete="off">
           <div class="helper-snippet">
-            <p>Run this in the dashboard browser console to get URLs for a SKU:</p>
-            <pre id="snippet-code">fetch('/api/scans').then(r=>r.json()).then(d=>{const s=d.docs.find(s=>s.laterality==='left');if(!s)return console.log('No left scan found');const p=s.product;const v=p.versions;const lv=v[v.length-1];const f=lv.files.find(f=>f.laterality==='left'&&f.type==='3d');const it=f.task.three.iterations;const last=it[it.length-1];console.log(JSON.stringify({sku:p.clientTags.find(t=>t.key==='clientSku')?.value||p.modelCode,raw:'https://dj5e08oeu5ym4.cloudfront.net/3e/'+s.glbFilename,touchedup:'https://dj5e08oeu5ym4.cloudfront.net/3e/'+last.previewFilename,autoshadow:'https://dj5e08oeu5ym4.cloudfront.net/3e/'+last.autoShadowFilename,brand:p.brand,color:p.color,silhouette:p.silhouette},null,2))})</pre>
+            <p>Run this in the dashboard browser console (replace SKU):</p>
+            <pre id="snippet-code"></pre>
             <button class="btn-small" onclick="copySnippet()">Copy</button>
-            <p style="margin-top:8px;">Then paste the JSON output here:</p>
-            <textarea id="json-paste" placeholder='Paste JSON here...' rows="4"></textarea>
+            <p style="margin-top:8px;">Paste the JSON output here:</p>
+            <textarea id="json-paste" placeholder='{"sku":"...","raw":"...","touchedup":"...","autoshadow":"..."}' rows="3"></textarea>
             <button class="btn-small" onclick="parseJsonPaste()">Fill URLs</button>
           </div>
         </div>

@@ -297,6 +297,7 @@ header p {
 
 .progress-msg {
   color: var(--text-secondary);
+  padding: 2px 0;
 }
 
 .progress-msg::before {
@@ -304,9 +305,19 @@ header p {
   color: var(--success);
 }
 
+.progress-msg.error {
+  color: var(--danger);
+}
+
 .progress-msg.error::before {
   content: "\2717  ";
   color: var(--danger);
+}
+
+.progress-time {
+  color: #555;
+  font-size: 0.75rem;
+  margin-right: 6px;
 }
 
 /* Result Section */
