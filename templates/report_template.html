@@ -101,6 +101,27 @@
 
   .footer { text-align: center; padding: 32px; color: var(--text-secondary); font-size: 13px; border-top: 1px solid var(--border); margin-top: 40px; }
 
+  /* Quick verdict */
+  .verdict { display: flex; align-items: center; gap: 16px; padding: 20px 24px; border-radius: var(--radius); margin-bottom: 24px; }
+  .verdict-pass { background: rgba(102,187,106,0.1); border: 1px solid var(--success); }
+  .verdict-warn { background: rgba(255,167,38,0.1); border: 1px solid var(--warning); }
+  .verdict-fail { background: rgba(239,83,80,0.1); border: 1px solid var(--danger); }
+  .verdict-icon { font-size: 32px; }
+  .verdict-text { font-size: 16px; font-weight: 600; }
+  .verdict-detail { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+
+  /* Print */
+  @media print {
+    body { background: #fff; color: #222; }
+    .section { break-inside: avoid; border-color: #ccc; }
+    .section-header { background: #f5f5f5; cursor: default; }
+    .section.collapsed .section-body { display: block; }
+    .lightbox-overlay { display: none !important; }
+    .header { background: #f0f4f8; border-color: #ccc; }
+    .header h1, .meta-value { color: #222; }
+    .badge { border: 1px solid currentColor; }
+  }
+
   @media (max-width: 768px) {
     .container { padding: 12px; }
     .header h1 { font-size: 20px; }
@@ -132,6 +153,40 @@
 </div>
 
 <div class="container">
+
+  <!-- Quick Verdict -->
+  {% set total_issues = geometry.raw.total_issues + geometry.touchedup.total_issues + geometry.autoshadow.total_issues %}
+  {% set has_critical = false %}
+  {% for key in ['raw', 'touchedup', 'autoshadow'] %}
+    {% for issue in geometry[key].issues %}
+      {% if issue.severity == 'critical' and issue.count > 0 %}{% set has_critical = true %}{% endif %}
+    {% endfor %}
+  {% endfor %}
+  {% if total_issues == 0 %}
+  <div class="verdict verdict-pass">
+    <div class="verdict-icon">&#10003;</div>
+    <div>
+      <div class="verdict-text" style="color:var(--success)">All Clear</div>
+      <div class="verdict-detail">No geometry issues found across all 3 models.</div>
+    </div>
+  </div>
+  {% elif has_critical %}
+  <div class="verdict verdict-fail">
+    <div class="verdict-icon">&#10007;</div>
+    <div>
+      <div class="verdict-text" style="color:var(--danger)">Critical Issues Found</div>
+      <div class="verdict-detail">{{ total_issues }} issue{{ 's' if total_issues != 1 }} detected — review required before production.</div>
+    </div>
+  </div>
+  {% else %}
+  <div class="verdict verdict-warn">
+    <div class="verdict-icon">&#9888;</div>
+    <div>
+      <div class="verdict-text" style="color:var(--warning)">Minor Issues Found</div>
+      <div class="verdict-detail">{{ total_issues }} issue{{ 's' if total_issues != 1 }} detected — review recommended.</div>
+    </div>
+  </div>
+  {% endif %}
 
   <!-- Summary -->
   <div class="section" id="sec-summary">
