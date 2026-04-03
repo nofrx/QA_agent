@@ -54,43 +54,41 @@ async def run_qa_pipeline(
 
     # Step 2: Create session
     session_dir = storage.create_session(sku)
-    await progress("Session created")
 
     # Step 3: Download & decrypt from URLs
     raw_path = os.path.join(session_dir, "raw_scan.glb")
     touchedup_path = os.path.join(session_dir, "touched_up.glb")
     autoshadow_path = os.path.join(session_dir, "autoshadow.glb")
 
+    await progress("Downloading 3 models from CloudFront...")
     for label, url_key, out_path in [
         ("raw scan", "raw", raw_path),
         ("touched-up", "touchedup", touchedup_path),
         ("autoshadow", "autoshadow", autoshadow_path),
     ]:
         try:
-            await progress(f"Downloading {label}...")
             await download_and_decrypt(urls[url_key], out_path, progress)
         except Exception as e:
             raise ValueError(f"Failed to download {label}: {e}")
 
     # Step 4: Geometry analysis (run in thread to avoid blocking event loop)
     loop = asyncio.get_event_loop()
+    await progress("Analyzing geometry in Blender...")
 
-    await progress("Running Blender geometry analysis on raw scan...")
     raw_geom = await loop.run_in_executor(None, run_geometry_analysis, config.blender_path, raw_path, os.path.join(session_dir, "geometry_raw.json"))
-    await progress(f"Raw scan: {raw_geom.get('vertices', 0)} verts, {raw_geom.get('total_issues', 0)} issues")
+    await progress(f"  Raw scan: {raw_geom.get('vertices', 0):,} verts, {raw_geom.get('total_issues', 0)} issues")
 
-    await progress("Running Blender geometry analysis on touched-up...")
     touchedup_geom = await loop.run_in_executor(None, run_geometry_analysis, config.blender_path, touchedup_path, os.path.join(session_dir, "geometry_touchedup.json"))
-    await progress(f"Touched-up: {touchedup_geom.get('vertices', 0)} verts, {touchedup_geom.get('total_issues', 0)} issues")
+    await progress(f"  Touched-up: {touchedup_geom.get('vertices', 0):,} verts, {touchedup_geom.get('total_issues', 0)} issues")
 
-    await progress("Running Blender geometry analysis on autoshadow...")
     autoshadow_geom = await loop.run_in_executor(None, run_geometry_analysis, config.blender_path, autoshadow_path, os.path.join(session_dir, "geometry_autoshadow.json"))
-    await progress(f"AutoShadow: {autoshadow_geom.get('vertices', 0)} verts, {autoshadow_geom.get('total_issues', 0)} issues")
+    await progress(f"  AutoShadow: {autoshadow_geom.get('vertices', 0):,} verts, {autoshadow_geom.get('total_issues', 0)} issues")
 
     geometry_results = {"raw": raw_geom, "touchedup": touchedup_geom, "autoshadow": autoshadow_geom}
 
     # Step 5: Extract textures (with error resilience)
     tex_dir = os.path.join(session_dir, "textures")
+    await progress("Extracting textures...")
 
     raw_tex = {"textures": {}}
     touchedup_tex = {"textures": {}}
@@ -102,7 +100,6 @@ async def run_qa_pipeline(
         ("autoshadow", autoshadow_path, "autoshadow"),
     ]:
         try:
-            await progress(f"Extracting textures from {label}...")
             tex_result = await loop.run_in_executor(None, run_texture_extraction, config.blender_path, path, tex_dir)
             if result_ref == "raw":
                 raw_tex = tex_result
@@ -111,9 +108,9 @@ async def run_qa_pipeline(
             else:
                 autoshadow_tex = tex_result
             tex_count = len(tex_result.get("textures", {}))
-            await progress(f"  Extracted {tex_count} textures from {label}")
+            await progress(f"  {label}: {tex_count} textures")
         except Exception as e:
-            await progress(f"Warning: Texture extraction failed for {label}: {e}")
+            await progress(f"  {label}: extraction failed ({e})")
 
     # Step 6: Texture comparison
     await progress("Comparing textures...")

@@ -30,7 +30,8 @@ async def download_and_decrypt(url: str, output_path: str, on_progress=None, ret
 
     size_mb = len(encrypted_data) / (1024 * 1024)
     if on_progress:
-        await on_progress(f"  Downloaded {size_mb:.1f} MB")
+        name = os.path.basename(output_path).replace('.glb', '').replace('_', ' ')
+        await on_progress(f"  {name}: {size_mb:.1f} MB downloaded, decrypting...")
 
     if len(encrypted_data) < 20:
         raise ValueError(f"Downloaded file too small ({len(encrypted_data)} bytes)")
