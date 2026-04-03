@@ -1,9 +1,10 @@
 import asyncio
 import os
 import json
-from fastapi import FastAPI, HTTPException, Request
+import uuid
+from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from starlette.responses import StreamingResponse
 from backend.config import load_config
@@ -19,7 +20,10 @@ app = FastAPI(title="Shoe QA")
 frontend_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend")
 app.mount("/static", StaticFiles(directory=frontend_dir), name="static")
 
+# Jobs keyed by unique job_id (not SKU) to avoid collisions
 jobs: dict[str, dict] = {}
+# Map SKU to latest job_id for SSE lookup
+sku_to_job: dict[str, str] = {}
 
 
 @app.get("/")
@@ -32,54 +36,41 @@ async def reports_page():
     return FileResponse(os.path.join(frontend_dir, "reports.html"))
 
 
+def _create_job(sku: str) -> str:
+    """Create a new job and return its ID."""
+    job_id = f"{sku}_{uuid.uuid4().hex[:8]}"
+    jobs[job_id] = {"status": "running", "messages": [], "result": None, "session_dir": None, "sku": sku}
+    sku_to_job[sku] = job_id
+    return job_id
+
+
 @app.post("/api/analyze/{sku}")
 async def start_analysis(sku: str):
     sku = sku.strip().upper()
-    if sku in jobs and jobs[sku].get("status") == "running":
+    if not sku:
+        raise HTTPException(400, "SKU is required")
+
+    # Check if already running for this SKU
+    existing = sku_to_job.get(sku)
+    if existing and jobs.get(existing, {}).get("status") == "running":
         raise HTTPException(400, f"Analysis already running for {sku}")
-    jobs[sku] = {"status": "running", "messages": [], "result": None, "session_dir": None}
+
+    job_id = _create_job(sku)
 
     async def run():
         try:
             async def on_progress(msg):
-                jobs[sku]["messages"].append(msg)
+                jobs[job_id]["messages"].append(msg)
             report_path, session_dir = await run_qa_pipeline(config, sku, on_progress)
-            jobs[sku]["status"] = "complete"
-            jobs[sku]["result"] = report_path
-            jobs[sku]["session_dir"] = session_dir
+            jobs[job_id]["status"] = "complete"
+            jobs[job_id]["result"] = report_path
+            jobs[job_id]["session_dir"] = session_dir
         except Exception as e:
-            jobs[sku]["status"] = "error"
-            jobs[sku]["messages"].append(f"Error: {str(e)}")
+            jobs[job_id]["status"] = "error"
+            jobs[job_id]["messages"].append(f"Error: {str(e)}")
 
     asyncio.create_task(run())
-    return {"job_id": sku, "status": "started"}
-
-
-@app.get("/api/status/{sku}")
-async def job_status(sku: str):
-    sku = sku.strip().upper()
-
-    async def event_stream():
-        sent = 0
-        while True:
-            job = jobs.get(sku)
-            if not job:
-                yield f"data: {json.dumps({'type': 'error', 'message': 'Job not found'})}\n\n"
-                break
-            while sent < len(job["messages"]):
-                yield f"data: {json.dumps({'type': 'progress', 'message': job['messages'][sent]})}\n\n"
-                sent += 1
-            if job["status"] == "complete":
-                session_dir = job.get("session_dir", "")
-                sku_name = os.path.basename(os.path.dirname(session_dir)) if session_dir else sku
-                session_name = os.path.basename(session_dir) if session_dir else ""
-                yield f"data: {json.dumps({'type': 'complete', 'sku': sku_name, 'session': session_name})}\n\n"
-                break
-            elif job["status"] == "error":
-                yield f"data: {json.dumps({'type': 'error', 'message': job['messages'][-1] if job['messages'] else 'Pipeline failed'})}\n\n"
-                break
-            await asyncio.sleep(0.5)
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    return {"job_id": job_id, "sku": sku, "status": "started"}
 
 
 class UrlAnalysisRequest(BaseModel):
@@ -93,12 +84,11 @@ class UrlAnalysisRequest(BaseModel):
 
 
 def _fix_url(url: str) -> str:
-    """Ensure URL has https:// protocol prefix."""
+    """Ensure URL has https:// protocol and is a valid CloudFront/HTTP URL."""
     url = url.strip()
     if not url:
         return url
     if not url.startswith("http://") and not url.startswith("https://"):
-        # If it looks like a CloudFront path, add protocol
         if url.startswith("dj5e08oeu5ym4") or url.startswith("//"):
             url = "https://" + url.lstrip("/")
         else:
@@ -110,9 +100,12 @@ def _fix_url(url: str) -> str:
 async def start_analysis_urls(req: UrlAnalysisRequest):
     """Start QA analysis using direct CloudFront URLs."""
     sku = req.sku.strip().upper()
-    if sku in jobs and jobs[sku].get("status") == "running":
+    if not sku:
+        raise HTTPException(400, "SKU is required")
+
+    existing = sku_to_job.get(sku)
+    if existing and jobs.get(existing, {}).get("status") == "running":
         raise HTTPException(400, f"Analysis already running for {sku}")
-    jobs[sku] = {"status": "running", "messages": [], "result": None, "session_dir": None}
 
     urls = {
         "raw": _fix_url(req.raw_url),
@@ -120,20 +113,63 @@ async def start_analysis_urls(req: UrlAnalysisRequest):
         "autoshadow": _fix_url(req.autoshadow_url),
     }
 
+    # Validate all URLs are present
+    for key, url in urls.items():
+        if not url:
+            raise HTTPException(400, f"Missing URL for {key}")
+
+    job_id = _create_job(sku)
+
     async def run():
         try:
             async def on_progress(msg):
-                jobs[sku]["messages"].append(msg)
+                jobs[job_id]["messages"].append(msg)
             report_path, session_dir = await run_qa_pipeline(config, sku, on_progress, urls=urls)
-            jobs[sku]["status"] = "complete"
-            jobs[sku]["result"] = report_path
-            jobs[sku]["session_dir"] = session_dir
+            jobs[job_id]["status"] = "complete"
+            jobs[job_id]["result"] = report_path
+            jobs[job_id]["session_dir"] = session_dir
         except Exception as e:
-            jobs[sku]["status"] = "error"
-            jobs[sku]["messages"].append(f"Error: {str(e)}")
+            jobs[job_id]["status"] = "error"
+            jobs[job_id]["messages"].append(f"Error: {str(e)}")
 
     asyncio.create_task(run())
-    return {"job_id": sku, "status": "started"}
+    return {"job_id": job_id, "sku": sku, "status": "started"}
+
+
+@app.get("/api/status/{job_id}")
+async def job_status(job_id: str):
+    """SSE stream of progress for a job. Accepts job_id or SKU."""
+    # Support both job_id and SKU lookup
+    job_id = job_id.strip().upper()
+    if job_id not in jobs:
+        # Try looking up by SKU
+        mapped = sku_to_job.get(job_id)
+        if mapped:
+            job_id = mapped
+
+    async def event_stream():
+        sent = 0
+        while True:
+            job = jobs.get(job_id)
+            if not job:
+                yield f"data: {json.dumps({'type': 'error', 'message': 'Job not found'})}\n\n"
+                break
+            while sent < len(job["messages"]):
+                yield f"data: {json.dumps({'type': 'progress', 'message': job['messages'][sent]})}\n\n"
+                sent += 1
+            if job["status"] == "complete":
+                session_dir = job.get("session_dir", "")
+                sku_name = job.get("sku", "")
+                session_name = os.path.basename(session_dir) if session_dir else ""
+                yield f"data: {json.dumps({'type': 'complete', 'sku': sku_name, 'session': session_name})}\n\n"
+                break
+            elif job["status"] == "error":
+                last_msg = job["messages"][-1] if job["messages"] else "Pipeline failed"
+                yield f"data: {json.dumps({'type': 'error', 'message': last_msg})}\n\n"
+                break
+            await asyncio.sleep(0.5)
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 @app.get("/api/reports")
@@ -143,6 +179,9 @@ async def list_reports():
 
 @app.get("/api/reports/{sku}/{session}/report.html")
 async def get_report(sku: str, session: str):
+    # Sanitize path components to prevent traversal
+    sku = os.path.basename(sku)
+    session = os.path.basename(session)
     report_path = os.path.join(config.reports_dir, sku, session, "report.html")
     if not os.path.exists(report_path):
         raise HTTPException(404, "Report not found")
