@@ -12,17 +12,20 @@ def run_blender_script(
 
     cmd = [blender_path, "-b", "-P", script_path, "--"] + args
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        result = subprocess.run(cmd, capture_output=True, timeout=timeout)
     except subprocess.TimeoutExpired:
         raise RuntimeError(f"Blender script timed out after {timeout}s: {script_path}")
+
+    stdout = result.stdout.decode("utf-8", errors="replace")
+    stderr = result.stderr.decode("utf-8", errors="replace")
 
     if result.returncode != 0:
         raise RuntimeError(
             f"Blender script failed (exit {result.returncode}):\n"
-            f"STDOUT: {result.stdout[-2000:]}\n"
-            f"STDERR: {result.stderr[-2000:]}"
+            f"STDOUT: {stdout[-2000:]}\n"
+            f"STDERR: {stderr[-2000:]}"
         )
-    return result.stdout
+    return stdout
 
 
 def _read_json_output(output_json: str, script_name: str) -> dict:
