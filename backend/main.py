@@ -189,6 +189,23 @@ async def get_report(sku: str, session: str):
     return FileResponse(report_path, media_type="text/html")
 
 
+@app.delete("/api/reports/{sku}/{session}")
+async def delete_report(sku: str, session: str):
+    """Delete a report session."""
+    import shutil
+    sku = os.path.basename(sku)
+    session = os.path.basename(session)
+    session_dir = os.path.join(config.reports_dir, sku, session)
+    if not os.path.isdir(session_dir):
+        raise HTTPException(404, "Session not found")
+    shutil.rmtree(session_dir)
+    # Clean up empty SKU directory
+    sku_dir = os.path.join(config.reports_dir, sku)
+    if os.path.isdir(sku_dir) and not os.listdir(sku_dir):
+        os.rmdir(sku_dir)
+    return {"status": "deleted", "sku": sku, "session": session}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=config.port)

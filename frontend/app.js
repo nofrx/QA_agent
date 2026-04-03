@@ -201,6 +201,7 @@ function loadReports() {
           }
 
           const meta = [brand, color].filter(Boolean).join(' / ');
+          const deleteBtn = '<button class="btn-delete" onclick="event.preventDefault();event.stopPropagation();deleteReport(\'' + escapeHtml(report.sku) + '\',\'' + escapeHtml(report.session) + '\')" title="Delete">&times;</button>';
           html +=
             '<a class="report-card" href="' + url + '" target="_blank">' +
             '<div class="report-info">' +
@@ -210,7 +211,7 @@ function loadReports() {
             '<span>' + escapeHtml(formatDate(date)) + '</span>' +
             '</div>' +
             '</div>' +
-            '<div>' + badges + '</div>' +
+            '<div style="display:flex;align-items:center;gap:8px;">' + badges + deleteBtn + '</div>' +
             '</a>';
         });
       });
@@ -219,6 +220,13 @@ function loadReports() {
     .catch(err => {
       container.innerHTML = '<div class="empty-state"><p>Failed to load reports</p><small>' + escapeHtml(err.message) + '</small></div>';
     });
+}
+
+function deleteReport(sku, session) {
+  if (!confirm('Delete report for ' + sku + '?')) return;
+  fetch('/api/reports/' + encodeURIComponent(sku) + '/' + encodeURIComponent(session), {method: 'DELETE'})
+    .then(res => { if (res.ok) loadReports(); })
+    .catch(() => {});
 }
 
 function formatDate(dateStr) {

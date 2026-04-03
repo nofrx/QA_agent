@@ -469,6 +469,28 @@ header p {
   color: var(--accent);
 }
 
+.btn-delete {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s, border-color 0.2s;
+  flex-shrink: 0;
+}
+
+.btn-delete:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
 .empty-state {
   text-align: center;
   padding: 60px 20px;
