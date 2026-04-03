@@ -1,5 +1,5 @@
 import numpy as np
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageFilter
 import os
 from dataclasses import dataclass
 
@@ -13,22 +13,35 @@ class TextureDiff:
     overlay_path: str
     side_by_side_path: str
     changed_regions: list
+    resolution_a: tuple = (0, 0)
+    resolution_b: tuple = (0, 0)
+    resolution_mismatch: bool = False
 
 
 def compare_textures(path_a: str, path_b: str, output_dir: str, name: str) -> TextureDiff:
-    img_a = np.array(Image.open(path_a).convert('RGB'))
-    img_b = np.array(Image.open(path_b).convert('RGB'))
+    """Compare two textures pixel-by-pixel. Generates heatmap, overlay, side-by-side."""
+    pil_a = Image.open(path_a).convert('RGB')
+    pil_b = Image.open(path_b).convert('RGB')
 
+    res_a = pil_a.size  # (width, height)
+    res_b = pil_b.size
+    resolution_mismatch = res_a != res_b
+
+    img_a = np.array(pil_a)
+    img_b = np.array(pil_b)
+
+    # Resize to match if different
     if img_a.shape != img_b.shape:
         h = max(img_a.shape[0], img_b.shape[0])
         w = max(img_a.shape[1], img_b.shape[1])
-        img_a = np.array(Image.fromarray(img_a).resize((w, h)))
-        img_b = np.array(Image.fromarray(img_b).resize((w, h)))
+        img_a = np.array(Image.fromarray(img_a).resize((w, h), Image.LANCZOS))
+        img_b = np.array(Image.fromarray(img_b).resize((w, h), Image.LANCZOS))
 
     diff = np.abs(img_a.astype(np.int16) - img_b.astype(np.int16)).astype(np.uint8)
     diff_gray = np.max(diff, axis=2)
 
-    threshold = 5
+    # Higher threshold if resolution mismatch (interpolation creates noise)
+    threshold = 15 if resolution_mismatch else 5
     changed_mask = diff_gray > threshold
     total_pixels = diff_gray.size
     changed_pixels = int(np.sum(changed_mask))
@@ -37,7 +50,7 @@ def compare_textures(path_a: str, path_b: str, output_dir: str, name: str) -> Te
     max_diff = int(np.max(diff_gray))
     mean_diff = round(float(np.mean(diff_gray[changed_mask])) if changed_pixels > 0 else 0, 2)
 
-    # Heatmap
+    # Heatmap (blue=minor, red=major)
     heatmap = np.zeros((*diff_gray.shape, 3), dtype=np.uint8)
     if max_diff > 0:
         normalized = (diff_gray.astype(np.float32) / max(max_diff, 1) * 255).astype(np.uint8)
@@ -47,10 +60,10 @@ def compare_textures(path_a: str, path_b: str, output_dir: str, name: str) -> Te
     heatmap_path = os.path.join(output_dir, f"{name}_heatmap.png")
     Image.fromarray(heatmap).save(heatmap_path)
 
-    # Overlay with red outlines
+    # Overlay — original A with red outlines around changed regions
     mask_img = Image.fromarray((changed_mask * 255).astype(np.uint8))
-    dilated = mask_img.filter(ImageFilter.MaxFilter(5))
-    eroded = mask_img.filter(ImageFilter.MinFilter(5))
+    dilated = mask_img.filter(ImageFilter.MaxFilter(7))
+    eroded = mask_img.filter(ImageFilter.MinFilter(3))
     outline = np.array(dilated).astype(np.int16) - np.array(eroded).astype(np.int16)
     outline = np.clip(outline, 0, 255).astype(np.uint8)
     overlay_arr = img_a.copy()
@@ -71,7 +84,7 @@ def compare_textures(path_a: str, path_b: str, output_dir: str, name: str) -> Te
     sbs_path = os.path.join(output_dir, f"{name}_sidebyside.png")
     Image.fromarray(sbs).save(sbs_path)
 
-    # Find changed regions
+    # Find changed region bounding boxes
     regions = []
     if np.any(changed_mask):
         rows = np.any(changed_mask, axis=1)
@@ -85,5 +98,7 @@ def compare_textures(path_a: str, path_b: str, output_dir: str, name: str) -> Te
     return TextureDiff(
         pct_changed=pct_changed, max_diff=max_diff, mean_diff=mean_diff,
         heatmap_path=heatmap_path, overlay_path=overlay_path,
-        side_by_side_path=sbs_path, changed_regions=regions
+        side_by_side_path=sbs_path, changed_regions=regions,
+        resolution_a=res_a, resolution_b=res_b,
+        resolution_mismatch=resolution_mismatch,
     )
