@@ -1,0 +1,9 @@
+{
+  "api_key": "d4cc0dd1-99b2-43b6-b59a-7f2107146ce1",
+  "cloudfront_base": "https://dj5e08oeu5ym4.cloudfront.net/3e",
+  "dashboard_api": "https://dashboard.shopar.ai/api",
+  "dashboard_viewer": "https://dashboard.shopar.ai/admin/viewer",
+  "blender_path": "/Applications/Blender 4.58.app/Contents/MacOS/Blender",
+  "reports_dir": "~/ShoeQA/reports",
+  "port": 8080
+}
