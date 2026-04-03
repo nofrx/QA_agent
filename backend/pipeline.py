@@ -47,22 +47,25 @@ async def run_qa_pipeline(
 
     # Step 2: Create session
     session_dir = storage.create_session(sku)
-    await progress(f"Session created")
+    await progress("Session created")
 
     # Step 3: Download & decrypt from URLs
     from backend.downloader import download_and_decrypt
-    import os
 
     raw_path = os.path.join(session_dir, "raw_scan.glb")
     touchedup_path = os.path.join(session_dir, "touched_up.glb")
     autoshadow_path = os.path.join(session_dir, "autoshadow.glb")
 
-    await progress("Downloading raw scan...")
-    await download_and_decrypt(urls["raw"], raw_path, progress)
-    await progress("Downloading touched-up model...")
-    await download_and_decrypt(urls["touchedup"], touchedup_path, progress)
-    await progress("Downloading autoshadow model...")
-    await download_and_decrypt(urls["autoshadow"], autoshadow_path, progress)
+    for label, url_key, out_path in [
+        ("raw scan", "raw", raw_path),
+        ("touched-up", "touchedup", touchedup_path),
+        ("autoshadow", "autoshadow", autoshadow_path),
+    ]:
+        try:
+            await progress(f"Downloading {label}...")
+            await download_and_decrypt(urls[url_key], out_path, progress)
+        except Exception as e:
+            raise ValueError(f"Failed to download {label}: {e}")
 
     # Step 4: Geometry analysis
     await progress("Running Blender geometry analysis on raw scan...")
