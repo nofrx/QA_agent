@@ -92,6 +92,20 @@ class UrlAnalysisRequest(BaseModel):
     silhouette: str = "Unknown"
 
 
+def _fix_url(url: str) -> str:
+    """Ensure URL has https:// protocol prefix."""
+    url = url.strip()
+    if not url:
+        return url
+    if not url.startswith("http://") and not url.startswith("https://"):
+        # If it looks like a CloudFront path, add protocol
+        if url.startswith("dj5e08oeu5ym4") or url.startswith("//"):
+            url = "https://" + url.lstrip("/")
+        else:
+            url = "https://" + url
+    return url
+
+
 @app.post("/api/analyze-urls")
 async def start_analysis_urls(req: UrlAnalysisRequest):
     """Start QA analysis using direct CloudFront URLs."""
@@ -100,7 +114,11 @@ async def start_analysis_urls(req: UrlAnalysisRequest):
         raise HTTPException(400, f"Analysis already running for {sku}")
     jobs[sku] = {"status": "running", "messages": [], "result": None, "session_dir": None}
 
-    urls = {"raw": req.raw_url, "touchedup": req.touchedup_url, "autoshadow": req.autoshadow_url}
+    urls = {
+        "raw": _fix_url(req.raw_url),
+        "touchedup": _fix_url(req.touchedup_url),
+        "autoshadow": _fix_url(req.autoshadow_url),
+    }
 
     async def run():
         try:

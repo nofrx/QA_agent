@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import os
 import httpx
 
 @dataclass
@@ -57,20 +58,91 @@ def extract_sku_files(scan: dict) -> ScanData:
                     autoshadow_filename=autoshadow, scan_id=scan.get("id", ""))
 
 async def find_scan_by_sku(api_base: str, api_key: str, sku: str) -> ScanData:
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        resp = await client.get(f"{api_base}/scans",
-                                headers={"x-api-key": api_key},
-                                params={"search": sku})
-        resp.raise_for_status()
-        data = resp.json()
-        docs = data.get("docs", [])
-        for scan in docs:
-            if scan.get("laterality") != "left":
-                continue
-            product = scan.get("product", {})
-            for tag in product.get("clientTags", []):
-                if tag.get("key") == "clientSku" and tag.get("value", "").upper() == sku.upper():
-                    return extract_sku_files(scan)
-            if product.get("modelCode", "").upper() == sku.upper():
+    """Try API key first, fall back to Playwright browser session."""
+    # Try API key auth
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.get(f"{api_base}/scans",
+                                    headers={"x-api-key": api_key},
+                                    params={"search": sku})
+            resp.raise_for_status()
+            data = resp.json()
+            return _find_sku_in_docs(data.get("docs", []), sku)
+    except Exception:
+        pass
+
+    # Fall back to Playwright with Chrome session
+    return await find_scan_by_sku_cdp(api_base, sku)
+
+async def find_scan_by_sku_cdp(api_base: str, sku: str) -> ScanData:
+    """Use AppleScript + Chrome to fetch scan data via sync XHR in a dashboard tab."""
+    import json as json_mod
+    import subprocess
+    import tempfile
+
+    # Write AppleScript to temp file — use single quotes inside JS to avoid AppleScript quote conflicts
+    applescript = (
+        'tell application "Google Chrome"\n'
+        '    set windowCount to count of windows\n'
+        '    repeat with w from 1 to windowCount\n'
+        '        set tabCount to count of tabs of window w\n'
+        '        repeat with i from 1 to tabCount\n'
+        '            set tabURL to URL of tab i of window w\n'
+        '            if tabURL contains "dashboard.shopar.ai" then\n'
+        '                set jsCode to "var x=new XMLHttpRequest();x.open(\'GET\',\'/api/scans?search=' + sku + '\',false);x.send();x.status===200?x.responseText:\'ERROR:\'+x.status;"\n'
+        '                set jsResult to execute tab i of window w javascript jsCode\n'
+        '                return jsResult\n'
+        '            end if\n'
+        '        end repeat\n'
+        '    end repeat\n'
+        '    return "NO_DASHBOARD_TAB"\n'
+        'end tell'
+    )
+
+    # Write to temp file
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.scpt', delete=False) as f:
+        f.write(applescript)
+        script_path = f.name
+
+    try:
+        result = subprocess.run(
+            ["osascript", script_path],
+            capture_output=True, text=True, timeout=15
+        )
+        output = result.stdout.strip()
+
+        if result.returncode != 0:
+            stderr = result.stderr.strip()
+            raise ValueError(f"AppleScript failed: {stderr[:200]}")
+
+        if not output or output == "NO_DASHBOARD_TAB":
+            raise ValueError(
+                "No dashboard.shopar.ai tab found in Chrome. "
+                "Please open the dashboard in Chrome first."
+            )
+
+        if output.startswith("ERROR:"):
+            raise ValueError(f"Dashboard API returned {output}")
+
+        data = json_mod.loads(output)
+        return _find_sku_in_docs(data.get("docs", []), sku)
+
+    except json_mod.JSONDecodeError:
+        raise ValueError(f"Invalid response from dashboard: {output[:200]}")
+    except subprocess.TimeoutExpired:
+        raise ValueError("Chrome AppleScript timed out")
+    finally:
+        os.unlink(script_path)
+
+def _find_sku_in_docs(docs: list, sku: str) -> ScanData:
+    """Find matching left-shoe scan in API response docs."""
+    for scan in docs:
+        if scan.get("laterality") != "left":
+            continue
+        product = scan.get("product", {})
+        for tag in product.get("clientTags", []):
+            if tag.get("key") == "clientSku" and tag.get("value", "").upper() == sku.upper():
                 return extract_sku_files(scan)
-        raise ValueError(f"No scan found for SKU: {sku}")
+        if product.get("modelCode", "").upper() == sku.upper():
+            return extract_sku_files(scan)
+    raise ValueError(f"No scan found for SKU: {sku}")
