@@ -236,12 +236,25 @@ TEX_RESOLUTION_NOT_4K = QARule(
     id="tex_resolution_not_4k",
     category="resolution",
     severity="warning",
-    title="Texture resolution below 4K",
+    title="AutoShadow output texture not 4K",
     explanation=(
-        "Production models require 4096x4096 textures for sufficient detail in AR viewers. "
-        "Lower resolution textures will appear blurry when viewed up close."
+        "The autoshadow script rebakes textures at 4096x4096, so the final output should always be 4K. "
+        "If the autoshadow output is not 4K, the script may have a configuration error."
     ),
-    what_to_do="Re-export textures at 4096x4096 resolution.",
+    what_to_do="Check the autoshadow script resolution settings and re-run to produce 4K output textures.",
+)
+
+TEX_RESOLUTION_TOUCHEDUP_OPTIMIZED = QARule(
+    id="tex_resolution_touchedup_optimized",
+    category="resolution",
+    severity="info",
+    title="Touched-up model uses optimized texture resolution",
+    explanation=(
+        "The touched-up model intentionally uses smaller textures (e.g. 2048x2048) as an optimization "
+        "to reduce working file size. This is the standard artist workflow. "
+        "The autoshadow script will rebake these to full 4K for production output."
+    ),
+    what_to_do="No action needed. Verify the autoshadow output uses 4K textures.",
 )
 
 TEX_RESOLUTION_MISMATCH = QARule(
@@ -276,14 +289,14 @@ FILESIZE_TOUCHUP_LARGER = QARule(
 FILESIZE_AUTOSHADOW_MUCH_LARGER = QARule(
     id="filesize_autoshadow_much_larger",
     category="filesize",
-    severity="warning",
-    title="AutoShadow file significantly larger than touched-up",
+    severity="info",
+    title="AutoShadow file larger than touched-up (expected)",
     explanation=(
-        "The autoshadow model is much larger than the touched-up input. "
-        "The autoshadow script should only modify textures, not geometry. "
-        "A large size increase suggests the script added geometry or rebaked textures at higher resolution."
+        "The autoshadow model is larger because the autoshadow script rebakes textures from the "
+        "optimized 2K touched-up input up to 4K production resolution. This is the intended pipeline "
+        "behavior — touched-up uses small textures for working efficiency, autoshadow produces the final 4K output."
     ),
-    what_to_do="Check if the autoshadow script is increasing geometry count or texture resolution unnecessarily.",
+    what_to_do="No action needed. Verify the file size increase is proportional to the 2K→4K upscale (roughly 4x texture data).",
 )
 
 
@@ -296,6 +309,6 @@ ALL_RULES = {r.id: r for r in [
     TEX_AUTOSHADOW_BASECOLOR, TEX_AUTOSHADOW_BASECOLOR_EXTERIOR,
     TEX_AUTOSHADOW_NORMAL, TEX_AUTOSHADOW_NORMAL_OK,
     TEX_AUTOSHADOW_ROUGHNESS, TEX_AUTOSHADOW_METALLIC,
-    TEX_RESOLUTION_NOT_4K, TEX_RESOLUTION_MISMATCH,
+    TEX_RESOLUTION_NOT_4K, TEX_RESOLUTION_TOUCHEDUP_OPTIMIZED, TEX_RESOLUTION_MISMATCH,
     FILESIZE_TOUCHUP_LARGER, FILESIZE_AUTOSHADOW_MUCH_LARGER,
 ]}

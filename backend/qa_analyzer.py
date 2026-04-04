@@ -178,7 +178,7 @@ def _check_file_sizes(geometry_results: dict) -> list:
     if auto_size > 0 and tu_size > 0 and auto_size > tu_size * 2:
         rule = ALL_RULES["filesize_autoshadow_much_larger"]
         findings.append(Finding(
-            rule_id=rule.id, severity="warning", model="autoshadow",
+            rule_id=rule.id, severity="info", model="autoshadow",
             title=f"AutoShadow ({auto_size:.1f} MB) is {auto_size/tu_size:.1f}x larger than touched-up ({tu_size:.1f} MB)",
             explanation=rule.explanation,
             recommendation=rule.what_to_do,
@@ -196,18 +196,38 @@ def _check_texture_resolution(geometry_results: dict) -> list:
         geom = geometry_results.get(model_key, {})
         for tex in geom.get("textures", []):
             if not tex.get("is_4k") and tex.get("width", 0) > 0:
-                rule = ALL_RULES["tex_resolution_not_4k"]
-                severity = "warning" if model_key == "touchedup" else "info"
-                findings.append(Finding(
-                    rule_id=rule.id, severity=severity, model=model_key,
-                    title=f"{label}: {tex['name']} is {tex['width']}x{tex['height']} (not 4K)",
-                    explanation=rule.explanation if model_key == "touchedup" else (
-                        f"The {label.lower()} has textures at {tex['width']}x{tex['height']}. "
-                        "This is common for scanner output or intermediate stages."
-                    ),
-                    recommendation=rule.what_to_do if model_key == "touchedup" else "Ensure final production output uses 4K textures.",
-                    data={"width": tex["width"], "height": tex["height"], "name": tex["name"]},
-                ))
+                if model_key == "touchedup":
+                    # Touched-up intentionally uses smaller textures — info only
+                    rule = ALL_RULES["tex_resolution_touchedup_optimized"]
+                    findings.append(Finding(
+                        rule_id=rule.id, severity="info", model=model_key,
+                        title=f"Touched-up: {tex['name']} is {tex['width']}x{tex['height']} (intentional optimization)",
+                        explanation=rule.explanation,
+                        recommendation=rule.what_to_do,
+                        data={"width": tex["width"], "height": tex["height"], "name": tex["name"]},
+                    ))
+                elif model_key == "autoshadow":
+                    # AutoShadow must produce 4K — flag as warning
+                    rule = ALL_RULES["tex_resolution_not_4k"]
+                    findings.append(Finding(
+                        rule_id=rule.id, severity="warning", model=model_key,
+                        title=f"AutoShadow output: {tex['name']} is {tex['width']}x{tex['height']} (should be 4K)",
+                        explanation=rule.explanation,
+                        recommendation=rule.what_to_do,
+                        data={"width": tex["width"], "height": tex["height"], "name": tex["name"]},
+                    ))
+                else:
+                    # Raw scan — info only
+                    findings.append(Finding(
+                        rule_id="tex_resolution_not_4k", severity="info", model=model_key,
+                        title=f"Raw scan: {tex['name']} is {tex['width']}x{tex['height']} (scanner output)",
+                        explanation=(
+                            f"The raw scan has textures at {tex['width']}x{tex['height']}. "
+                            "Scanner output resolution varies and is expected to differ from production targets."
+                        ),
+                        recommendation="Ensure the final autoshadow output uses 4K textures.",
+                        data={"width": tex["width"], "height": tex["height"], "name": tex["name"]},
+                    ))
                 break  # One finding per model is enough
 
     return findings
@@ -233,6 +253,17 @@ def _check_texture_diffs(texture_diffs: dict) -> list:
     return findings
 
 
+_UV_REORG_NOTE = (
+    " Note: UV islands were reorganized (logos cut out and repositioned for shoe mirroring preparation), "
+    "so part of the pixel difference reflects UV layout changes rather than purely artist edits — "
+    "the comparison is between different UV layouts."
+)
+_BAKE_EXTEND_NOTE = (
+    " Background areas outside UV islands show extended pixels from Blender's bake 'extend' fill — "
+    "this is intentional seam prevention, not an issue."
+)
+
+
 def _check_raw_vs_touchedup(tex_type: str, diff) -> list:
     """Analyze raw scan vs touched-up texture differences."""
     findings = []
@@ -246,7 +277,7 @@ def _check_raw_vs_touchedup(tex_type: str, diff) -> list:
         findings.append(Finding(
             rule_id=rule.id, severity="expected", model="touchedup",
             title=f"{tex_label}: {pct}% changed by artist",
-            explanation=rule.explanation,
+            explanation=rule.explanation + _UV_REORG_NOTE + _BAKE_EXTEND_NOTE,
             recommendation=rule.what_to_do,
             data={"pct_changed": pct, "max_diff": max_d},
         ))
@@ -267,7 +298,7 @@ def _check_raw_vs_touchedup(tex_type: str, diff) -> list:
             findings.append(Finding(
                 rule_id=rule.id, severity="expected", model="touchedup",
                 title=f"{tex_label}: {pct}% corrected by artist",
-                explanation=rule.explanation,
+                explanation=rule.explanation + _UV_REORG_NOTE + _BAKE_EXTEND_NOTE,
                 recommendation=rule.what_to_do,
                 data={"pct_changed": pct, "max_diff": max_d},
             ))
@@ -277,7 +308,7 @@ def _check_raw_vs_touchedup(tex_type: str, diff) -> list:
         findings.append(Finding(
             rule_id=rule.id, severity="expected", model="touchedup",
             title=f"{tex_label}: {pct}% corrected by artist",
-            explanation=rule.explanation,
+            explanation=rule.explanation + _UV_REORG_NOTE + _BAKE_EXTEND_NOTE,
             recommendation=rule.what_to_do,
             data={"pct_changed": pct, "max_diff": max_d},
         ))
@@ -287,7 +318,7 @@ def _check_raw_vs_touchedup(tex_type: str, diff) -> list:
         findings.append(Finding(
             rule_id=rule.id, severity="expected", model="touchedup",
             title=f"{tex_label}: {pct}% corrected by artist",
-            explanation=rule.explanation,
+            explanation=rule.explanation + _UV_REORG_NOTE + _BAKE_EXTEND_NOTE,
             recommendation=rule.what_to_do,
             data={"pct_changed": pct, "max_diff": max_d},
         ))
