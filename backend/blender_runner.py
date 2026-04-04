@@ -71,6 +71,27 @@ def run_texture_extraction(blender_path: str, glb_path: str, output_dir: str) ->
     return _read_json_output(output_json, "texture_extractor")
 
 
+def run_multi_view_render(blender_path: str, glb_path: str, model_name: str,
+                          output_dir: str, textures_json: str = None) -> dict:
+    basename = os.path.splitext(os.path.basename(glb_path))[0]
+    output_json = os.path.join(output_dir, f"multiview_{basename}.json")
+    args = [
+        "--glb_path", glb_path,
+        "--model_name", model_name,
+        "--output_dir", output_dir,
+        "--output_json", output_json,
+    ]
+    if textures_json and os.path.exists(textures_json):
+        args += ["--textures_json", textures_json]
+    run_blender_script(
+        blender_path,
+        _blender_script_path("multi_view_renderer.py"),
+        args,
+        timeout=600,
+    )
+    return _read_json_output(output_json, "multi_view_renderer")
+
+
 def run_issue_renderer(blender_path: str, glb_path: str, issues_json: str, output_dir: str) -> dict:
     output_json = os.path.join(output_dir, "render_result.json")
     run_blender_script(

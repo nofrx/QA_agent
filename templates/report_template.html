@@ -74,6 +74,21 @@
   .summary-table .label { font-weight:600; color:var(--dim); width:200px; }
   .summary-table .note { font-size:11px; color:#666; display:block; margin-top:2px; }
 
+  /* Visual inspection */
+  .vi-section { margin-bottom: 24px; }
+  .vi-section h3 { font-size:15px; font-weight:600; color:var(--accent); margin-bottom:10px; text-transform:capitalize; }
+  .vi-grid { display:grid; gap:6px; margin-bottom:16px; }
+  .vi-grid-6 { grid-template-columns: repeat(6, 1fr); }
+  .vi-grid-3 { grid-template-columns: repeat(3, 1fr); }
+  .vi-cell { display:flex; flex-direction:column; gap:4px; }
+  .vi-label { font-size:10px; text-transform:uppercase; color:var(--dim); letter-spacing:0.5px; text-align:center; }
+  .vi-img { width:100%; aspect-ratio:1; border-radius:4px; cursor:pointer; border:1px solid var(--border); object-fit:cover; background:var(--bg); }
+  .vi-model-col { display:flex; flex-direction:column; gap:4px; }
+  .vi-row-label { font-size:11px; font-weight:600; color:var(--dim); text-align:right; padding-right:8px; display:flex; align-items:center; }
+  .vi-comparison { display:grid; grid-template-columns: 80px repeat(3, 1fr); gap:6px; margin-bottom:8px; align-items:center; }
+  .vi-comparison-header { display:grid; grid-template-columns: 80px repeat(3, 1fr); gap:6px; margin-bottom:4px; }
+  .vi-col-label { font-size:11px; font-weight:700; color:var(--accent); text-align:center; text-transform:uppercase; letter-spacing:0.5px; }
+
   /* Texture panels */
   .tex-panel { background:var(--card); border:1px solid var(--border); border-radius:var(--r); margin-bottom:16px; overflow:hidden; }
   .tex-panel-header { padding:12px 16px; background:rgba(79,195,247,0.06); border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; font-weight:600; font-size:14px; }
@@ -245,6 +260,118 @@
         {% if f.recommendation != 'No action needed.' %}<div class="finding-recommendation">{{ f.recommendation }}</div>{% endif %}
       </div>
       {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Visual Inspection -->
+  {% if visual %}
+  <div class="section" id="sec-visual">
+    <div class="section-header" onclick="toggleSection('sec-visual')">
+      <h2>Visual Inspection</h2>
+      <div class="section-toggle">&#9660;</div>
+    </div>
+    <div class="section-body">
+
+      {# ── Material Views ─────────────────────────────────────── #}
+      {% set mat_views = visual.get('material', {}) %}
+      {% if mat_views %}
+      <div class="vi-section">
+        <h3>Material Views — 6 Angles</h3>
+        <p style="font-size:12px;color:var(--dim);margin-bottom:12px;">Orthographic views: front / back / left / right / top / bottom for each model.</p>
+        <div class="vi-comparison-header">
+          <div></div>
+          <div class="vi-col-label">Raw Scan</div>
+          <div class="vi-col-label">Touched-Up</div>
+          <div class="vi-col-label">AutoShadow</div>
+        </div>
+        {% set view_order = ['front', 'back', 'left', 'right', 'top', 'bottom'] %}
+        {% for view in view_order %}
+          {% set models = mat_views.get(view, {}) %}
+          {% if models %}
+          <div class="vi-comparison">
+            <div class="vi-row-label">{{ view }}</div>
+            {% for model in ['raw', 'touchedup', 'autoshadow'] %}
+            <div>
+              {% if models.get(model) %}
+              <img class="vi-img" src="{{ models[model] }}" alt="{{ model }} {{ view }}" onclick="openLightbox(this.src)">
+              {% else %}
+              <div class="vi-img" style="display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:11px;">N/A</div>
+              {% endif %}
+            </div>
+            {% endfor %}
+          </div>
+          {% endif %}
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {# ── Face Orientation Views ─────────────────────────────── #}
+      {% set fo_views = visual.get('face_orientation', {}) %}
+      {% if fo_views %}
+      <div class="vi-section">
+        <h3>Face Orientation — Blue=Correct, Red=Flipped Normals</h3>
+        <p style="font-size:12px;color:var(--dim);margin-bottom:12px;">Red areas indicate flipped normals that will render incorrectly in production.</p>
+        <div class="vi-comparison-header">
+          <div></div>
+          <div class="vi-col-label">Raw Scan</div>
+          <div class="vi-col-label">Touched-Up</div>
+          <div class="vi-col-label">AutoShadow</div>
+        </div>
+        {% for view in view_order %}
+          {% set models = fo_views.get(view, {}) %}
+          {% if models %}
+          <div class="vi-comparison">
+            <div class="vi-row-label">{{ view }}</div>
+            {% for model in ['raw', 'touchedup', 'autoshadow'] %}
+            <div>
+              {% if models.get(model) %}
+              <img class="vi-img" src="{{ models[model] }}" alt="{{ model }} {{ view }} orient" onclick="openLightbox(this.src)">
+              {% else %}
+              <div class="vi-img" style="display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:11px;">N/A</div>
+              {% endif %}
+            </div>
+            {% endfor %}
+          </div>
+          {% endif %}
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {# ── PBR Channel Views ──────────────────────────────────── #}
+      {% set pbr_channels = ['basecolor', 'normal', 'roughness', 'metallic'] %}
+      {% set has_pbr = namespace(v=false) %}
+      {% for ch in pbr_channels %}{% if visual.get(ch) %}{% set has_pbr.v = true %}{% endif %}{% endfor %}
+      {% if has_pbr.v %}
+      <div class="vi-section">
+        <h3>PBR Channels — 3/4 View</h3>
+        <p style="font-size:12px;color:var(--dim);margin-bottom:12px;">Each material map visualised independently. Roughness/metallic shown as grayscale.</p>
+        <div class="vi-comparison-header">
+          <div></div>
+          <div class="vi-col-label">Raw Scan</div>
+          <div class="vi-col-label">Touched-Up</div>
+          <div class="vi-col-label">AutoShadow</div>
+        </div>
+        {% for ch in pbr_channels %}
+          {% set ch_data = visual.get(ch, {}).get('34', {}) %}
+          {% if ch_data %}
+          <div class="vi-comparison">
+            <div class="vi-row-label">{{ ch }}</div>
+            {% for model in ['raw', 'touchedup', 'autoshadow'] %}
+            <div>
+              {% if ch_data.get(model) %}
+              <img class="vi-img" src="{{ ch_data[model] }}" alt="{{ model }} {{ ch }}" onclick="openLightbox(this.src)">
+              {% else %}
+              <div class="vi-img" style="display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:11px;">N/A</div>
+              {% endif %}
+            </div>
+            {% endfor %}
+          </div>
+          {% endif %}
+        {% endfor %}
+      </div>
+      {% endif %}
+
     </div>
   </div>
   {% endif %}

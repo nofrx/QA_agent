@@ -6,7 +6,7 @@ from typing import Callable, Awaitable
 from backend.config import Config
 from backend.dashboard_api import find_scan_by_sku, ScanData
 from backend.downloader import download_and_decrypt
-from backend.blender_runner import run_geometry_analysis, run_texture_extraction, run_issue_renderer
+from backend.blender_runner import run_geometry_analysis, run_texture_extraction, run_issue_renderer, run_multi_view_render
 from backend.texture_compare import compare_textures
 from backend.report_generator import generate_report
 from backend.qa_analyzer import analyze as run_qa_analysis
@@ -151,7 +151,31 @@ async def run_qa_pipeline(
             texture_diffs[tex_type] = comparisons
     await progress(f"Texture comparison complete: {len(texture_diffs)} map types analyzed")
 
-    # Step 7: Render issue screenshots
+    # Step 7: Multi-view renders
+    await progress("Rendering multi-view screenshots...")
+    multi_view_renders = []
+    renders_dir = os.path.join(session_dir, "renders")
+    os.makedirs(renders_dir, exist_ok=True)
+    for model_name, glb_path, tex_result in [
+        ("raw",        raw_path,        raw_tex),
+        ("touchedup",  touchedup_path,  touchedup_tex),
+        ("autoshadow", autoshadow_path, autoshadow_tex),
+    ]:
+        try:
+            # Pass pre-extracted texture json if available
+            basename = os.path.splitext(os.path.basename(glb_path))[0]
+            tex_json = os.path.join(tex_dir, f"extraction_{basename}.json")
+            render_result = await loop.run_in_executor(
+                None, run_multi_view_render,
+                config.blender_path, glb_path, model_name, renders_dir,
+                tex_json if os.path.exists(tex_json) else None
+            )
+            multi_view_renders.extend(render_result.get("renders", []))
+            await progress(f"  {model_name}: {len(render_result.get('renders', []))} views")
+        except Exception as e:
+            await progress(f"Warning: Multi-view render failed for {model_name}: {e}")
+
+    # Step 8: Render issue screenshots
     await progress("Rendering issue screenshots...")
     issue_renders = []
     issues_dir = os.path.join(session_dir, "issues")
@@ -170,12 +194,12 @@ async def run_qa_pipeline(
             except Exception as e:
                 await progress(f"Warning: Issue rendering failed for {model_name}: {e}")
 
-    # Step 8: Run QA analysis
+    # Step 9: Run QA analysis
     await progress("Running QA analysis...")
     qa_report = run_qa_analysis(geometry_results, texture_diffs, issue_renders)
     await progress(f"QA verdict: {qa_report.verdict} ({qa_report.critical_count} critical, {qa_report.warning_count} warnings, {qa_report.expected_count} expected)")
 
-    # Step 9: Generate report
+    # Step 10: Generate report
     await progress("Generating HTML report...")
     template_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "templates")
     report_path = generate_report(
@@ -184,6 +208,7 @@ async def run_qa_pipeline(
         geometry_results=geometry_results,
         texture_diffs=texture_diffs,
         issue_renders=issue_renders,
+        multi_view_renders=multi_view_renders,
         qa_report=qa_report,
         screenshots={},
         template_dir=template_dir)

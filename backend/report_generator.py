@@ -113,9 +113,36 @@ def build_texture_summary(texture_diffs: dict) -> dict:
     return sections
 
 
+def build_multi_view_sections(multi_view_renders: list) -> dict:
+    """Organise multi-view renders into a nested dict for the template.
+
+    Returns:
+      {
+        "material":          { view: { model: b64, ... }, ... },
+        "face_orientation":  { view: { model: b64, ... }, ... },
+        "basecolor":         { "34": { model: b64, ... } },
+        "normal":            { ... },
+        "roughness":         { ... },
+        "metallic":          { ... },
+      }
+    """
+    sections: dict = {}
+    for render in (multi_view_renders or []):
+        channel = render.get("channel", "")
+        view = render.get("view", "")
+        model = render.get("model", "")
+        path = render.get("path", "")
+        b64 = image_to_base64(path, max_size=512)
+        if not b64:
+            continue
+        sections.setdefault(channel, {}).setdefault(view, {})[model] = b64
+    return sections
+
+
 def generate_report(
     session_dir, scan_data, geometry_results, texture_diffs,
-    issue_renders, screenshots, template_dir, qa_report=None
+    issue_renders, screenshots, template_dir, qa_report=None,
+    multi_view_renders=None,
 ):
     """Generate an HTML QA report with embedded images and QA findings."""
     env = Environment(loader=FileSystemLoader(template_dir), autoescape=True)
@@ -124,6 +151,7 @@ def generate_report(
 
     geometry_summary = build_geometry_summary(geometry_results)
     texture_sections = build_texture_summary(texture_diffs)
+    visual_sections = build_multi_view_sections(multi_view_renders)
 
     # Build issue screenshots map for linking to findings
     issue_images = {}
@@ -164,6 +192,7 @@ def generate_report(
         expected_count=qa_report.expected_count if qa_report else 0,
         issue_images=issue_images,
         screenshots={k: image_to_base64(v) for k, v in screenshots.items()} if screenshots else {},
+        visual=visual_sections,
     )
 
     output_path = os.path.join(session_dir, "report.html")
