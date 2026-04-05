@@ -8,3 +8,4 @@ build/
 .ralph-prompt.md
 .claude/ralph-loop.local.md
 config.json
+.DS_Store
