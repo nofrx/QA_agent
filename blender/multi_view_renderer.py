@@ -57,17 +57,24 @@ def clear_scene():
 
 def setup_render(resolution=512):
     scene = bpy.context.scene
-    scene.render.engine = 'BLENDER_EEVEE'
+    # Support both Blender 3.x (BLENDER_EEVEE) and 4.x (BLENDER_EEVEE_NEXT)
+    engines = bpy.types.RenderSettings.bl_rna.properties['engine'].enum_items.keys()
+    scene.render.engine = 'BLENDER_EEVEE_NEXT' if 'BLENDER_EEVEE_NEXT' in engines else 'BLENDER_EEVEE'
     scene.render.resolution_x = resolution
     scene.render.resolution_y = resolution
     scene.render.film_transparent = True
     scene.render.image_settings.file_format = 'PNG'
     scene.render.image_settings.color_mode = 'RGBA'
-    # Fast EEVEE settings
-    scene.eevee.taa_render_samples = 16
-    scene.eevee.use_gtao = False
-    scene.eevee.use_bloom = False
-    scene.eevee.use_ssr = False
+    # Fast EEVEE settings (attribute names differ between 3.x and 4.x)
+    eevee = scene.eevee
+    if hasattr(eevee, 'taa_render_samples'):
+        eevee.taa_render_samples = 16
+    if hasattr(eevee, 'use_gtao'):
+        eevee.use_gtao = False
+    if hasattr(eevee, 'use_bloom'):
+        eevee.use_bloom = False
+    if hasattr(eevee, 'use_ssr'):
+        eevee.use_ssr = False
 
 
 def add_world_lighting():
@@ -245,16 +252,29 @@ def make_emission_channel_material(name, image, channel):
     output = nodes.new("ShaderNodeOutputMaterial")
 
     if channel in ("metallic", "roughness", "ao"):
-        separate = nodes.new("ShaderNodeSeparateColor")
-        links.new(tex.outputs["Color"], separate.inputs["Color"])
+        # ShaderNodeSeparateColor in Blender 4.x, ShaderNodeSepRGB in 3.x
+        try:
+            separate = nodes.new("ShaderNodeSeparateColor")
+            sep_in, is4x = "Color", True
+        except Exception:
+            separate = nodes.new("ShaderNodeSepRGB")
+            sep_in, is4x = "Image", False
+        links.new(tex.outputs["Color"], separate.inputs[sep_in])
         # ORM: R=AO, G=Roughness, B=Metallic
-        channel_map = {"ao": "Red", "roughness": "Green", "metallic": "Blue"}
-        ch = channel_map.get(channel, "Green")
-        combine = nodes.new("ShaderNodeCombineColor")
-        links.new(separate.outputs[ch], combine.inputs["Red"])
-        links.new(separate.outputs[ch], combine.inputs["Green"])
-        links.new(separate.outputs[ch], combine.inputs["Blue"])
-        links.new(combine.outputs["Color"], emission.inputs["Color"])
+        if is4x:
+            ch_map = {"ao": "Red", "roughness": "Green", "metallic": "Blue"}
+            ch = ch_map.get(channel, "Green")
+            combine = nodes.new("ShaderNodeCombineColor")
+            for inp in ("Red", "Green", "Blue"):
+                links.new(separate.outputs[ch], combine.inputs[inp])
+            links.new(combine.outputs["Color"], emission.inputs["Color"])
+        else:
+            ch_map = {"ao": "R", "roughness": "G", "metallic": "B"}
+            ch = ch_map.get(channel, "G")
+            combine = nodes.new("ShaderNodeCombRGB")
+            for inp in ("R", "G", "B"):
+                links.new(separate.outputs[ch], combine.inputs[inp])
+            links.new(combine.outputs["Image"], emission.inputs["Color"])
     else:
         links.new(tex.outputs["Color"], emission.inputs["Color"])
 
