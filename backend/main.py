@@ -258,6 +258,23 @@ async def get_report(sku: str, session: str):
     return FileResponse(report_path, media_type="text/html")
 
 
+@app.get("/api/reports/{sku}/{session}/files/{filename}")
+async def get_session_file(sku: str, session: str, filename: str):
+    """Serve GLB and JSON files from a session directory for the 3D viewer."""
+    sku = os.path.basename(sku)
+    session = os.path.basename(session)
+    filename = os.path.basename(filename)  # prevent path traversal
+    # Only allow safe file types
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in (".glb", ".json"):
+        raise HTTPException(400, "Only .glb and .json files are served")
+    file_path = os.path.join(config.reports_dir, sku, session, filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(404, f"File not found: {filename}")
+    media_types = {".glb": "model/gltf-binary", ".json": "application/json"}
+    return FileResponse(file_path, media_type=media_types[ext])
+
+
 @app.delete("/api/reports/{sku}/{session}")
 async def delete_report(sku: str, session: str):
     """Delete a report session."""

@@ -30,7 +30,9 @@ class QAReport:
 
 
 def analyze(geometry_results: dict, texture_diffs: dict, issue_renders: list = None) -> QAReport:
-    """Run all QA rules against the data and produce a report with findings."""
+    """Run all QA rules against the data and produce a report with findings.
+    issue_renders is kept for backward compatibility but no longer used.
+    """
     findings = []
 
     # ─── Geometry analysis ────────────────────────────────
@@ -46,13 +48,6 @@ def analyze(geometry_results: dict, texture_diffs: dict, issue_renders: list = N
 
     # ─── Texture comparison analysis ──────────────────────
     findings.extend(_check_texture_diffs(texture_diffs))
-
-    # ─── Link issue screenshots to findings ───────────────
-    if issue_renders:
-        render_map = {r.get("type"): r for r in issue_renders if r.get("path")}
-        for f in findings:
-            if f.rule_id in render_map:
-                f.has_screenshot = True
 
     # ─── Compute verdict ──────────────────────────────────
     critical = sum(1 for f in findings if f.severity == "critical")

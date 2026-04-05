@@ -14,7 +14,6 @@
   body { font-family:'Segoe UI',-apple-system,sans-serif; background:var(--bg); color:var(--text); line-height:1.6; }
   .container { max-width:1200px; margin:0 auto; padding:24px; }
 
-  /* Header */
   .header { background:linear-gradient(135deg,#0f3460,#16213e); border-bottom:2px solid var(--accent2); padding:32px 0; margin-bottom:32px; }
   .header .container { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; }
   .header h1 { font-size:28px; font-weight:700; color:#fff; }
@@ -24,7 +23,6 @@
   .meta-label { font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--dim); }
   .meta-value { font-size:16px; font-weight:600; color:#fff; }
 
-  /* Verdict */
   .verdict { padding:24px; border-radius:var(--r); margin-bottom:28px; display:flex; align-items:center; gap:20px; }
   .verdict-pass { background:rgba(102,187,106,0.1); border:1px solid var(--green); }
   .verdict-review { background:rgba(255,167,38,0.1); border:1px solid var(--orange); }
@@ -35,7 +33,6 @@
   .verdict-counts { display:flex; gap:12px; margin-top:8px; }
   .verdict-count { font-size:12px; padding:2px 10px; border-radius:12px; font-weight:600; }
 
-  /* Section */
   .section { background:var(--bg2); border:1px solid var(--border); border-radius:var(--r); margin-bottom:24px; overflow:hidden; }
   .section-header { display:flex; justify-content:space-between; align-items:center; padding:16px 24px; background:var(--card); border-bottom:1px solid var(--border); cursor:pointer; user-select:none; }
   .section-header:hover { background:var(--hover); }
@@ -45,7 +42,6 @@
   .section-body { padding:24px; }
   .section.collapsed .section-body { display:none; }
 
-  /* Finding cards */
   .finding { background:var(--card); border:1px solid var(--border); border-radius:var(--r); padding:20px; margin-bottom:16px; border-left:4px solid var(--border); }
   .finding-critical { border-left-color:var(--red); }
   .finding-warning { border-left-color:var(--orange); }
@@ -56,17 +52,13 @@
   .finding-explanation { font-size:13px; color:var(--dim); line-height:1.7; margin-bottom:8px; }
   .finding-recommendation { font-size:13px; font-style:italic; color:var(--accent); margin-bottom:8px; }
   .finding-data { font-size:11px; color:#666; font-family:'SF Mono','Fira Code',monospace; }
-  .finding-image { margin-top:12px; }
-  .finding-image img { max-width:400px; width:100%; border-radius:4px; cursor:pointer; border:1px solid var(--border); }
 
-  /* Badges */
   .badge { display:inline-block; padding:2px 10px; border-radius:4px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; }
   .badge-critical { background:rgba(239,83,80,0.15); color:var(--red); }
   .badge-warning { background:rgba(255,167,38,0.15); color:var(--orange); }
   .badge-info { background:rgba(79,195,247,0.15); color:var(--accent); }
   .badge-expected { background:rgba(102,187,106,0.15); color:var(--green); }
 
-  /* Summary table */
   .summary-table { width:100%; border-collapse:collapse; font-size:14px; }
   .summary-table th { text-align:left; padding:10px 16px; background:var(--card); border-bottom:2px solid var(--border); font-weight:600; color:var(--accent); font-size:13px; text-transform:uppercase; }
   .summary-table td { padding:10px 16px; border-bottom:1px solid var(--border); }
@@ -74,22 +66,6 @@
   .summary-table .label { font-weight:600; color:var(--dim); width:200px; }
   .summary-table .note { font-size:11px; color:#666; display:block; margin-top:2px; }
 
-  /* Visual inspection */
-  .vi-section { margin-bottom: 24px; }
-  .vi-section h3 { font-size:15px; font-weight:600; color:var(--accent); margin-bottom:10px; text-transform:capitalize; }
-  .vi-grid { display:grid; gap:6px; margin-bottom:16px; }
-  .vi-grid-6 { grid-template-columns: repeat(6, 1fr); }
-  .vi-grid-3 { grid-template-columns: repeat(3, 1fr); }
-  .vi-cell { display:flex; flex-direction:column; gap:4px; }
-  .vi-label { font-size:10px; text-transform:uppercase; color:var(--dim); letter-spacing:0.5px; text-align:center; }
-  .vi-img { width:100%; aspect-ratio:1; border-radius:4px; cursor:pointer; border:1px solid var(--border); object-fit:cover; background:var(--bg); }
-  .vi-model-col { display:flex; flex-direction:column; gap:4px; }
-  .vi-row-label { font-size:11px; font-weight:600; color:var(--dim); text-align:right; padding-right:8px; display:flex; align-items:center; }
-  .vi-comparison { display:grid; grid-template-columns: 80px repeat(3, 1fr); gap:6px; margin-bottom:8px; align-items:center; }
-  .vi-comparison-header { display:grid; grid-template-columns: 80px repeat(3, 1fr); gap:6px; margin-bottom:4px; }
-  .vi-col-label { font-size:11px; font-weight:700; color:var(--accent); text-align:center; text-transform:uppercase; letter-spacing:0.5px; }
-
-  /* Texture panels */
   .tex-panel { background:var(--card); border:1px solid var(--border); border-radius:var(--r); margin-bottom:16px; overflow:hidden; }
   .tex-panel-header { padding:12px 16px; background:rgba(79,195,247,0.06); border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; font-weight:600; font-size:14px; }
   .tex-panel-body { padding:16px; }
@@ -97,24 +73,102 @@
   .tex-images img { width:100%; border-radius:4px; cursor:pointer; }
   .tex-img-label { font-size:11px; text-transform:uppercase; color:var(--dim); margin-bottom:4px; }
 
-  /* Lightbox */
+  /* 3D Viewer */
+  #viewer-section .section-body { padding: 0; }
+  #viewer-wrap {
+    background: #0d1117;
+    border-radius: 0 0 var(--r) var(--r);
+    overflow: hidden;
+    position: relative;
+  }
+  #viewer-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+  #viewer-controls .ctrl-group {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+  }
+  #viewer-controls .ctrl-sep {
+    width: 1px;
+    height: 24px;
+    background: var(--border);
+    margin: 0 4px;
+  }
+  #viewer-controls label {
+    font-size: 11px;
+    color: var(--dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-right: 4px;
+  }
+  .vbtn {
+    padding: 5px 14px;
+    border: 1px solid var(--border);
+    background: var(--bg2);
+    color: var(--dim);
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .vbtn:hover { background: var(--hover); color: var(--text); }
+  .vbtn.active { background: var(--accent2); border-color: var(--accent); color: #fff; }
+  .vbtn.active-red { background: rgba(239,83,80,0.3); border-color: var(--red); color: #fff; }
+  #viewer-canvas { display: block; width: 100%; height: 520px; }
+  #viewer-status {
+    position: absolute;
+    bottom: 12px;
+    left: 16px;
+    font-size: 11px;
+    color: var(--dim);
+    pointer-events: none;
+    text-shadow: 0 1px 4px #000;
+  }
+  #viewer-loading {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(13,17,23,0.85);
+    font-size: 14px;
+    color: var(--dim);
+    gap: 12px;
+  }
+  .v-spinner {
+    width: 32px; height: 32px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
   .lightbox { display:none; position:fixed; top:0;left:0;right:0;bottom:0; background:rgba(0,0,0,0.92); z-index:9999; cursor:zoom-out; justify-content:center; align-items:center; padding:40px; }
   .lightbox.active { display:flex; }
   .lightbox img { max-width:95%; max-height:95vh; border-radius:4px; }
-
   .footer { text-align:center; padding:32px; color:var(--dim); font-size:13px; border-top:1px solid var(--border); margin-top:40px; }
 
   @media print {
     body { background:#fff; color:#222; }
     .section.collapsed .section-body { display:block; }
     .lightbox { display:none !important; }
-    .header { background:#f0f4f8; }
-    .header h1,.meta-value { color:#222; }
+    #viewer-section { display:none; }
   }
   @media (max-width:768px) {
     .container { padding:12px; }
     .header h1 { font-size:20px; }
     .tex-images { grid-template-columns:1fr; }
+    #viewer-canvas { height: 360px; }
   }
 </style>
 </head>
@@ -181,6 +235,43 @@
   </div>
   {% endif %}
 
+  <!-- 3D Viewer -->
+  <div class="section" id="viewer-section">
+    <div class="section-header" onclick="toggleSection('viewer-section')">
+      <h2>3D Model Inspector</h2>
+      <div class="section-toggle">&#9660;</div>
+    </div>
+    <div class="section-body" style="padding:0">
+      <div id="viewer-wrap">
+        <div id="viewer-controls">
+          <div class="ctrl-group">
+            <label>Model</label>
+            <button class="vbtn active" id="btn-raw"        onclick="switchModel('raw')">Raw Scan</button>
+            <button class="vbtn"        id="btn-touchedup"  onclick="switchModel('touchedup')">Touched-Up</button>
+            <button class="vbtn"        id="btn-autoshadow" onclick="switchModel('autoshadow')">AutoShadow</button>
+          </div>
+          <div class="ctrl-sep"></div>
+          <div class="ctrl-group">
+            <label>View</label>
+            <button class="vbtn active" id="mode-standard"      onclick="switchMode('standard')">Standard PBR</button>
+            <button class="vbtn"        id="mode-basecolor"      onclick="switchMode('basecolor')">Base Color</button>
+            <button class="vbtn"        id="mode-normal"         onclick="switchMode('normal')">Normal Map</button>
+            <button class="vbtn"        id="mode-roughness"      onclick="switchMode('roughness')">Roughness</button>
+            <button class="vbtn"        id="mode-metallic"       onclick="switchMode('metallic')">Metallic</button>
+            <button class="vbtn"        id="mode-face-orient"    onclick="switchMode('face-orient')">Face Orientation</button>
+            <button class="vbtn"        id="mode-wireframe"      onclick="switchMode('wireframe')">Wireframe</button>
+          </div>
+        </div>
+        <canvas id="viewer-canvas"></canvas>
+        <div id="viewer-loading">
+          <div class="v-spinner"></div>
+          <div id="viewer-loading-msg">Loading models…</div>
+        </div>
+        <div id="viewer-status"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- Critical & Warning Findings -->
   {% set actionable = [] %}
   {% for f in findings if f.severity in ['critical', 'warning'] %}
@@ -201,11 +292,6 @@
         </div>
         <div class="finding-explanation">{{ f.explanation }}</div>
         <div class="finding-recommendation">{{ f.recommendation }}</div>
-        {% if f.image %}
-        <div class="finding-image">
-          <img src="{{ f.image }}" alt="{{ f.title }}" onclick="openLightbox(this.src)">
-        </div>
-        {% endif %}
         {% if f.data %}<div class="finding-data">{{ f.data }}</div>{% endif %}
       </div>
       {% endfor %}
@@ -213,7 +299,7 @@
   </div>
   {% endif %}
 
-  <!-- Expected Findings (collapsed) -->
+  <!-- Expected Findings -->
   {% set expected_findings = [] %}
   {% for f in findings if f.severity == 'expected' %}
     {% if expected_findings.append(f) %}{% endif %}
@@ -238,7 +324,7 @@
   </div>
   {% endif %}
 
-  <!-- Info Findings (collapsed) -->
+  <!-- Info Findings -->
   {% set info_findings = [] %}
   {% for f in findings if f.severity == 'info' %}
     {% if info_findings.append(f) %}{% endif %}
@@ -264,119 +350,7 @@
   </div>
   {% endif %}
 
-  <!-- Visual Inspection -->
-  {% if visual %}
-  <div class="section" id="sec-visual">
-    <div class="section-header" onclick="toggleSection('sec-visual')">
-      <h2>Visual Inspection</h2>
-      <div class="section-toggle">&#9660;</div>
-    </div>
-    <div class="section-body">
-
-      {# ── Material Views ─────────────────────────────────────── #}
-      {% set mat_views = visual.get('material', {}) %}
-      {% if mat_views %}
-      <div class="vi-section">
-        <h3>Material Views — 6 Angles</h3>
-        <p style="font-size:12px;color:var(--dim);margin-bottom:12px;">Orthographic views: front / back / left / right / top / bottom for each model.</p>
-        <div class="vi-comparison-header">
-          <div></div>
-          <div class="vi-col-label">Raw Scan</div>
-          <div class="vi-col-label">Touched-Up</div>
-          <div class="vi-col-label">AutoShadow</div>
-        </div>
-        {% set view_order = ['front', 'back', 'left', 'right', 'top', 'bottom'] %}
-        {% for view in view_order %}
-          {% set models = mat_views.get(view, {}) %}
-          {% if models %}
-          <div class="vi-comparison">
-            <div class="vi-row-label">{{ view }}</div>
-            {% for model in ['raw', 'touchedup', 'autoshadow'] %}
-            <div>
-              {% if models.get(model) %}
-              <img class="vi-img" src="{{ models[model] }}" alt="{{ model }} {{ view }}" onclick="openLightbox(this.src)">
-              {% else %}
-              <div class="vi-img" style="display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:11px;">N/A</div>
-              {% endif %}
-            </div>
-            {% endfor %}
-          </div>
-          {% endif %}
-        {% endfor %}
-      </div>
-      {% endif %}
-
-      {# ── Face Orientation Views ─────────────────────────────── #}
-      {% set fo_views = visual.get('face_orientation', {}) %}
-      {% if fo_views %}
-      <div class="vi-section">
-        <h3>Face Orientation — Blue=Correct, Red=Flipped Normals</h3>
-        <p style="font-size:12px;color:var(--dim);margin-bottom:12px;">Red areas indicate flipped normals that will render incorrectly in production.</p>
-        <div class="vi-comparison-header">
-          <div></div>
-          <div class="vi-col-label">Raw Scan</div>
-          <div class="vi-col-label">Touched-Up</div>
-          <div class="vi-col-label">AutoShadow</div>
-        </div>
-        {% for view in view_order %}
-          {% set models = fo_views.get(view, {}) %}
-          {% if models %}
-          <div class="vi-comparison">
-            <div class="vi-row-label">{{ view }}</div>
-            {% for model in ['raw', 'touchedup', 'autoshadow'] %}
-            <div>
-              {% if models.get(model) %}
-              <img class="vi-img" src="{{ models[model] }}" alt="{{ model }} {{ view }} orient" onclick="openLightbox(this.src)">
-              {% else %}
-              <div class="vi-img" style="display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:11px;">N/A</div>
-              {% endif %}
-            </div>
-            {% endfor %}
-          </div>
-          {% endif %}
-        {% endfor %}
-      </div>
-      {% endif %}
-
-      {# ── PBR Channel Views ──────────────────────────────────── #}
-      {% set pbr_channels = ['basecolor', 'normal', 'roughness', 'metallic'] %}
-      {% set has_pbr = namespace(v=false) %}
-      {% for ch in pbr_channels %}{% if visual.get(ch) %}{% set has_pbr.v = true %}{% endif %}{% endfor %}
-      {% if has_pbr.v %}
-      <div class="vi-section">
-        <h3>PBR Channels — 3/4 View</h3>
-        <p style="font-size:12px;color:var(--dim);margin-bottom:12px;">Each material map visualised independently. Roughness/metallic shown as grayscale.</p>
-        <div class="vi-comparison-header">
-          <div></div>
-          <div class="vi-col-label">Raw Scan</div>
-          <div class="vi-col-label">Touched-Up</div>
-          <div class="vi-col-label">AutoShadow</div>
-        </div>
-        {% for ch in pbr_channels %}
-          {% set ch_data = visual.get(ch, {}).get('34', {}) %}
-          {% if ch_data %}
-          <div class="vi-comparison">
-            <div class="vi-row-label">{{ ch }}</div>
-            {% for model in ['raw', 'touchedup', 'autoshadow'] %}
-            <div>
-              {% if ch_data.get(model) %}
-              <img class="vi-img" src="{{ ch_data[model] }}" alt="{{ model }} {{ ch }}" onclick="openLightbox(this.src)">
-              {% else %}
-              <div class="vi-img" style="display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:11px;">N/A</div>
-              {% endif %}
-            </div>
-            {% endfor %}
-          </div>
-          {% endif %}
-        {% endfor %}
-      </div>
-      {% endif %}
-
-    </div>
-  </div>
-  {% endif %}
-
-  <!-- Texture Comparisons (visual) -->
+  <!-- Texture Comparisons -->
   {% if textures %}
   <div class="section collapsed" id="sec-textures">
     <div class="section-header" onclick="toggleSection('sec-textures')">
@@ -409,7 +383,7 @@
   </div>
   {% endif %}
 
-  <!-- Geometry Summary (collapsed) -->
+  <!-- Geometry Summary -->
   {% if geometry %}
   <div class="section collapsed" id="sec-geometry">
     <div class="section-header" onclick="toggleSection('sec-geometry')">
@@ -433,13 +407,13 @@
             <td>{{ "{:,}".format(geometry.autoshadow.faces) }}</td>
           </tr>
           <tr>
-            <td class="label">File Size<span class="note">Touched-up should be smaller (decimated mesh)</span></td>
+            <td class="label">File Size</td>
             <td>{{ "%.1f"|format(geometry.raw.file_size_mb) }} MB</td>
             <td>{{ "%.1f"|format(geometry.touchedup.file_size_mb) }} MB</td>
             <td>{{ "%.1f"|format(geometry.autoshadow.file_size_mb) }} MB</td>
           </tr>
           <tr>
-            <td class="label">Textures<span class="note">Production requires 4096x4096</span></td>
+            <td class="label">Textures<span class="note">Production target: 4096×4096</span></td>
             {% for key in ['raw', 'touchedup', 'autoshadow'] %}
             <td>
               {% for t in geometry[key].textures %}{{ t.name }} ({{ t.width }}x{{ t.height }}){% if not t.is_4k %} <span style="color:var(--orange)">&#9888;</span>{% endif %}<br>{% endfor %}
@@ -456,10 +430,344 @@
 
 <div class="footer">Shoe QA Report &middot; {{ sku }} &middot; Generated {{ generated_at }}</div>
 
+<!-- Three.js viewer -->
 <script>
-function toggleSection(id){document.getElementById(id).classList.toggle('collapsed');}
-function openLightbox(src){document.getElementById('lightbox-img').src=src;document.getElementById('lightbox').classList.add('active');}
-document.addEventListener('keydown',function(e){if(e.key==='Escape')document.getElementById('lightbox').classList.remove('active');});
+// ── GLB URLs and issues data injected by report generator ────────────────────
+const GLB_URLS = {{ glb_urls | tojson }};
+const ISSUES_DATA = {{ issues_data }};
+
+// ── Utility ──────────────────────────────────────────────────────────────────
+function toggleSection(id) { document.getElementById(id).classList.toggle('collapsed'); }
+function openLightbox(src) { document.getElementById('lightbox-img').src = src; document.getElementById('lightbox').classList.add('active'); }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') document.getElementById('lightbox').classList.remove('active'); });
 </script>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ── State ─────────────────────────────────────────────────────────────────────
+const models = { raw: null, touchedup: null, autoshadow: null };
+const originalMaterials = new Map(); // mesh.uuid -> original material(s)
+let currentModel = 'raw';
+let currentMode  = 'standard';
+let renderer, scene, camera, controls, animFrameId;
+const canvas = document.getElementById('viewer-canvas');
+const loading = document.getElementById('viewer-loading');
+const loadingMsg = document.getElementById('viewer-loading-msg');
+const statusEl = document.getElementById('viewer-status');
+
+// ── Renderer setup ────────────────────────────────────────────────────────────
+renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+renderer.shadowMap.enabled = false;
+renderer.setClearColor(0x0d1117);
+
+scene = new THREE.Scene();
+
+camera = new THREE.PerspectiveCamera(45, 1, 0.001, 100);
+camera.position.set(0, 0.3, 1.2);
+
+controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+controls.dampingFactor = 0.07;
+controls.minDistance = 0.05;
+controls.maxDistance = 10;
+controls.addEventListener('change', render);
+
+// Lighting
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+scene.add(ambientLight);
+const dirLight1 = new THREE.DirectionalLight(0xffffff, 2.0);
+dirLight1.position.set(1, 2, 2);
+scene.add(dirLight1);
+const dirLight2 = new THREE.DirectionalLight(0x8899cc, 0.4);
+dirLight2.position.set(-2, -1, -1);
+scene.add(dirLight2);
+
+// ── Shader materials ──────────────────────────────────────────────────────────
+const FACE_ORIENT_VERT = `
+  varying vec3 vNormal;
+  void main() {
+    vNormal = normalize(normalMatrix * normal);
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+const FACE_ORIENT_FRAG = `
+  varying vec3 vNormal;
+  void main() {
+    float facing = dot(normalize(vNormal), vec3(0.0, 0.0, 1.0));
+    vec3 blue = vec3(0.1, 0.35, 1.0);
+    vec3 red  = vec3(1.0, 0.12, 0.08);
+    gl_FragColor = vec4(facing >= 0.0 ? blue : red, 1.0);
+  }
+`;
+
+function makeFaceOrientMat() {
+  return new THREE.ShaderMaterial({
+    vertexShader: FACE_ORIENT_VERT,
+    fragmentShader: FACE_ORIENT_FRAG,
+    side: THREE.FrontSide,
+  });
+}
+
+function makeChannelMat(texture, channel) {
+  // channel: 'rgb' | 'r' | 'g' | 'b'
+  const vert = `
+    varying vec2 vUv;
+    void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }
+  `;
+  const swizzle = { rgb: 'color.rgb', r: 'vec3(color.r)', g: 'vec3(color.g)', b: 'vec3(color.b)' }[channel] || 'color.rgb';
+  const frag = `
+    uniform sampler2D map;
+    varying vec2 vUv;
+    void main() {
+      vec4 color = texture2D(map, vUv);
+      gl_FragColor = vec4(${swizzle}, 1.0);
+    }
+  `;
+  return new THREE.ShaderMaterial({
+    uniforms: { map: { value: texture } },
+    vertexShader: vert,
+    fragmentShader: frag,
+    side: THREE.FrontSide,
+  });
+}
+
+function makeWireframeMat() {
+  return new THREE.MeshBasicMaterial({ color: 0x4fc3f7, wireframe: true });
+}
+
+// ── Material extraction helpers ───────────────────────────────────────────────
+function extractTexture(mat, slot) {
+  // slot: 'map' (basecolor) | 'normalMap' | 'roughnessMap' | 'metalnessMap'
+  if (!mat) return null;
+  return mat[slot] || null;
+}
+
+function findBestTexture(group, slot) {
+  let found = null;
+  group.traverse(obj => {
+    if (found) return;
+    if (obj.isMesh && obj.material) {
+      const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+      for (const m of mats) {
+        const t = extractTexture(m, slot);
+        if (t) { found = t; break; }
+      }
+    }
+  });
+  return found;
+}
+
+// ── Save / restore materials ──────────────────────────────────────────────────
+function saveMaterials(group) {
+  group.traverse(obj => {
+    if (obj.isMesh) {
+      originalMaterials.set(obj.uuid, obj.material);
+    }
+  });
+}
+
+function restoreMaterials(group) {
+  group.traverse(obj => {
+    if (obj.isMesh && originalMaterials.has(obj.uuid)) {
+      obj.material = originalMaterials.get(obj.uuid);
+    }
+  });
+}
+
+function applyMaterial(group, mat) {
+  group.traverse(obj => {
+    if (obj.isMesh) obj.material = mat;
+  });
+}
+
+// ── Camera fit ────────────────────────────────────────────────────────────────
+function fitCamera(group) {
+  const box = new THREE.Box3().setFromObject(group);
+  const center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z);
+
+  controls.target.copy(center);
+  const fov = camera.fov * (Math.PI / 180);
+  const dist = (maxDim / 2) / Math.tan(fov / 2) * 1.6;
+  camera.position.set(center.x + dist * 0.3, center.y + dist * 0.15, center.z + dist);
+  camera.near = maxDim * 0.001;
+  camera.far = maxDim * 100;
+  camera.updateProjectionMatrix();
+  controls.minDistance = maxDim * 0.05;
+  controls.maxDistance = maxDim * 20;
+  controls.update();
+}
+
+// ── Render loop ───────────────────────────────────────────────────────────────
+function render() {
+  renderer.render(scene, camera);
+}
+
+function animate() {
+  animFrameId = requestAnimationFrame(animate);
+  controls.update();
+  render();
+}
+
+function resizeRenderer() {
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+  if (renderer.domElement.width !== w || renderer.domElement.height !== h) {
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    render();
+  }
+}
+
+window.addEventListener('resize', resizeRenderer);
+resizeRenderer();
+animate();
+
+// ── Load all GLBs ─────────────────────────────────────────────────────────────
+const loader = new GLTFLoader();
+let loadedCount = 0;
+const totalModels = Object.keys(GLB_URLS).length;
+
+function loadModel(key, url) {
+  loadingMsg.textContent = `Loading ${key} model…`;
+  loader.load(
+    url,
+    gltf => {
+      const group = gltf.scene;
+      group.visible = (key === 'raw'); // only raw visible at start
+      scene.add(group);
+      models[key] = group;
+      saveMaterials(group);
+      loadedCount++;
+
+      if (loadedCount === 1) fitCamera(group);
+
+      loadingMsg.textContent = `Loaded ${loadedCount}/${totalModels} models…`;
+      if (loadedCount === totalModels) {
+        loading.style.display = 'none';
+        updateStatus();
+        render();
+      }
+    },
+    xhr => {
+      if (xhr.total) {
+        const pct = Math.round((xhr.loaded / xhr.total) * 100);
+        loadingMsg.textContent = `Loading ${key}… ${pct}%`;
+      }
+    },
+    err => {
+      loadedCount++;
+      loadingMsg.textContent = `Warning: ${key} failed to load`;
+      if (loadedCount === totalModels) {
+        loading.style.display = 'none';
+      }
+      console.warn('GLB load error', key, err);
+    }
+  );
+}
+
+for (const [key, url] of Object.entries(GLB_URLS)) {
+  loadModel(key, url);
+}
+
+// ── Model switching ───────────────────────────────────────────────────────────
+window.switchModel = function(key) {
+  for (const [k, g] of Object.entries(models)) {
+    if (g) g.visible = (k === key);
+  }
+  currentModel = key;
+
+  ['raw','touchedup','autoshadow'].forEach(k => {
+    document.getElementById('btn-' + k).classList.toggle('active', k === key);
+  });
+
+  // Re-apply current mode to new model
+  applyMode(currentMode);
+  updateStatus();
+  render();
+};
+
+// ── Mode switching ────────────────────────────────────────────────────────────
+window.switchMode = function(mode) {
+  currentMode = mode;
+  applyMode(mode);
+  const modes = ['standard','basecolor','normal','roughness','metallic','face-orient','wireframe'];
+  modes.forEach(m => {
+    const btn = document.getElementById('mode-' + m);
+    if (!btn) return;
+    btn.classList.remove('active', 'active-red');
+    if (m === mode) {
+      btn.classList.add(mode === 'face-orient' ? 'active-red' : 'active');
+    }
+  });
+  updateStatus();
+  render();
+};
+
+function applyMode(mode) {
+  const group = models[currentModel];
+  if (!group) return;
+
+  // Always restore first
+  restoreMaterials(group);
+
+  if (mode === 'standard') return;
+  if (mode === 'wireframe') { applyMaterial(group, makeWireframeMat()); return; }
+  if (mode === 'face-orient') { applyMaterial(group, makeFaceOrientMat()); return; }
+
+  const slotMap = {
+    basecolor: 'map',
+    normal:    'normalMap',
+    roughness: 'roughnessMap',
+    metallic:  'metalnessMap',
+  };
+  const channelMap = {
+    basecolor: 'rgb',
+    normal:    'rgb',
+    roughness: 'g',   // roughness in G channel of ORM or standalone
+    metallic:  'b',   // metallic in B channel of ORM or standalone
+  };
+
+  const slot = slotMap[mode];
+  const channel = channelMap[mode];
+  const tex = findBestTexture(group, slot);
+  if (tex) {
+    applyMaterial(group, makeChannelMat(tex, channel));
+  } else {
+    // No texture found — show grey
+    applyMaterial(group, new THREE.MeshBasicMaterial({ color: 0x444444 }));
+  }
+}
+
+function updateStatus() {
+  const issues = ISSUES_DATA[currentModel] || {};
+  const parts = [];
+  if (issues.flipped_normals > 0) parts.push(`${issues.flipped_normals} flipped normals`);
+  if (issues.non_manifold > 0)    parts.push(`${issues.non_manifold} non-manifold`);
+  if (issues.negative_uv > 0)     parts.push(`${issues.negative_uv} negative UV`);
+  const modelLabel = {raw:'Raw Scan', touchedup:'Touched-Up', autoshadow:'AutoShadow'}[currentModel];
+  statusEl.textContent = parts.length
+    ? `${modelLabel} · Issues: ${parts.join(', ')}`
+    : `${modelLabel} · No geometry issues`;
+}
+</script>
+
 </body>
 </html>
