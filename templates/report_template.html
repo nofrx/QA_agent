@@ -733,6 +733,55 @@ window.switchMode = function(mode) {
   render();
 };
 
+// ── Flipped normal markers ─────────────────────────────────────────────────────
+let issueMarkersGroup = null;
+
+function clearIssueMarkers() {
+  if (issueMarkersGroup) {
+    scene.remove(issueMarkersGroup);
+    issueMarkersGroup.traverse(obj => {
+      if (obj.geometry) obj.geometry.dispose();
+      if (obj.material) obj.material.dispose();
+    });
+    issueMarkersGroup = null;
+  }
+}
+
+function showFlippedNormalMarkers(modelKey) {
+  clearIssueMarkers();
+  const issues = ISSUES_DATA[modelKey];
+  if (!issues || !issues.flipped_positions || issues.flipped_positions.length === 0) return;
+
+  issueMarkersGroup = new THREE.Group();
+  issueMarkersGroup.name = 'issue-markers';
+
+  // Determine scale from active model bounds
+  const group = models[modelKey];
+  if (!group) return;
+  const box = new THREE.Box3().setFromObject(group);
+  const modelSize = box.getSize(new THREE.Vector3());
+  const markerRadius = Math.max(modelSize.x, modelSize.y, modelSize.z) * 0.012;
+  const arrowLen = markerRadius * 6;
+
+  const sphereGeo = new THREE.SphereGeometry(markerRadius, 8, 8);
+  const markerMat = new THREE.MeshBasicMaterial({ color: 0xff2020 });
+
+  for (const fp of issues.flipped_positions) {
+    // Red dot at face center
+    const dot = new THREE.Mesh(sphereGeo, markerMat);
+    dot.position.set(fp.c[0], fp.c[1], fp.c[2]);
+    issueMarkersGroup.add(dot);
+
+    // Red arrow showing the flipped normal direction
+    const dir = new THREE.Vector3(fp.n[0], fp.n[1], fp.n[2]).normalize();
+    const origin = new THREE.Vector3(fp.c[0], fp.c[1], fp.c[2]);
+    const arrow = new THREE.ArrowHelper(dir, origin, arrowLen, 0xff2020, arrowLen * 0.3, markerRadius * 1.5);
+    issueMarkersGroup.add(arrow);
+  }
+
+  scene.add(issueMarkersGroup);
+}
+
 function applyMode(mode) {
   const group = models[currentModel];
   if (!group) return;
@@ -743,14 +792,22 @@ function applyMode(mode) {
   // Standard PBR uses original materials with tone mapping
   if (mode === 'standard') {
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    clearIssueMarkers();
     return;
   }
 
   // All non-standard modes: disable tone mapping for accurate preview
   renderer.toneMapping = THREE.NoToneMapping;
 
+  // Remove old markers
+  clearIssueMarkers();
+
   if (mode === 'wireframe') { applyMaterial(group, makeWireframeMat()); return; }
-  if (mode === 'face-orient') { applyMaterial(group, makeFaceOrientMat()); return; }
+  if (mode === 'face-orient') {
+    applyMaterial(group, makeFaceOrientMat());
+    showFlippedNormalMarkers(currentModel);
+    return;
+  }
 
   const slotMap = {
     basecolor: 'map',

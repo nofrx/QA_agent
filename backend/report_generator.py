@@ -98,12 +98,20 @@ def build_texture_summary(texture_diffs: dict) -> dict:
 
 
 def build_issues_data(geometry_results: dict) -> dict:
-    """Build per-model issue counts for the 3D viewer overlay."""
+    """Build per-model issue data including flipped normal positions for 3D overlay."""
     data = {}
     for model_key in ["raw", "touchedup", "autoshadow"]:
         geom = geometry_results.get(model_key, {})
+        # Collect flipped normal positions + directions for viewer markers
+        flipped = []
+        for fn in geom.get("flipped_normals", []):
+            flipped.append({
+                "c": fn["center"],    # [x, y, z] position
+                "n": fn["normal"],    # [nx, ny, nz] direction
+            })
         data[model_key] = {
             "flipped_normals": geom.get("flipped_normals_count", 0),
+            "flipped_positions": flipped,
             "non_manifold": geom.get("non_manifold_count", 0),
             "loose_vertices": geom.get("loose_vertices_count", 0),
             "negative_uv": geom.get("negative_uv_count", 0),
