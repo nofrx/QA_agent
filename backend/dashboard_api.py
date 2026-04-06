@@ -57,21 +57,32 @@ def extract_from_asset(asset: dict, sku: str) -> ScanData:
 async def find_scan_by_sku(api_base: str, api_key: str, sku: str) -> ScanData:
     """Find scan data for a SKU. Tries API key, then Chrome AppleScript."""
     # Try API key auth first
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.get(
-                f"{api_base}/scans",
-                headers={"x-api-key": api_key},
-                params={"search": sku}
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            return _find_sku_in_scan_docs(data.get("docs", []), sku)
-    except Exception:
-        pass
+    api_error = None
+    if api_key:
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.get(
+                    f"{api_base}/scans",
+                    headers={"x-api-key": api_key},
+                    params={"search": sku}
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                return _find_sku_in_scan_docs(data.get("docs", []), sku)
+        except httpx.HTTPStatusError as e:
+            api_error = f"API key returned {e.response.status_code} (may be expired)"
+        except Exception as e:
+            api_error = str(e)
 
     # Fall back to Chrome AppleScript via assets API
-    return await find_scan_by_sku_chrome(api_base, sku)
+    try:
+        return await find_scan_by_sku_chrome(api_base, sku)
+    except ValueError as e:
+        # Add API key context to the Chrome fallback error
+        msg = str(e)
+        if api_error and "No dashboard" in msg:
+            msg += f"\n\nAPI key also failed: {api_error}.\nOpen https://dashboard.shopar.ai in Chrome to use auto-lookup."
+        raise ValueError(msg)
 
 
 async def find_scan_by_sku_chrome(api_base: str, sku: str) -> ScanData:
