@@ -68,13 +68,22 @@ config.json          → API keys, Blender path, CloudFront base URL
 
 ### Face Orientation Detection
 - Blender geometry analyzer uses **neighbor-comparison**: `face.normal.dot(avg_neighbor_normals) < -0.5`
+- **Area-aware filtering**: each flipped face includes `area` and `relative_area` (fraction of total mesh surface)
+- Faces below 0.01% of total mesh area are classified as "insignificant" (sub-pixel geometry artifacts)
+- `significant_flipped_normals_count` is the primary metric; insignificant-only findings are severity="info" not "critical"
+- 3D viewer markers only show for significant flipped normals
 - GLB export normalizes vertex winding, so Three.js `gl_FrontFacing` can't detect flipped normals
 - Solution: pass exact face center + normal positions from geometry JSON → render as red `ArrowHelper` markers
 
 ### Dashboard API Auth
 - Primary: API key via `x-api-key` header (currently returns 403 — expired)
 - Fallback: AppleScript JS injection into Chrome, then Safari — requires "Allow JavaScript from Apple Events" enabled in browser Developer menu
-- The JS paginates through `/api/assets` (200/page, up to 5K assets) to find the SKU
+- SKU lookup uses Payload CMS `where[sku][equals]` query — instant lookup across all 34K+ assets (no pagination needed)
+
+### Optional AutoShadow
+- Pipeline gracefully handles SKUs without autoshadow models
+- Downloads, geometry analysis, and texture extraction skip missing models
+- Report viewer hides AutoShadow tab and geometry table column when unavailable
 
 ### Performance
 - Downloads: parallel `asyncio.gather` (wall time = slowest file, not sum)
