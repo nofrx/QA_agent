@@ -5,7 +5,7 @@ import time
 from typing import Callable, Awaitable
 from backend.config import Config
 from backend.dashboard_api import find_scan_by_sku, ScanData
-from backend.downloader import download_and_decrypt
+from backend.downloader import download_and_decrypt_cached
 from backend.blender_runner import run_geometry_analysis, run_texture_extraction
 from backend.texture_compare import compare_textures
 from backend.report_generator import generate_report
@@ -88,7 +88,7 @@ async def run_qa_pipeline(
 
         async def _download(label, url_key, out_path):
             try:
-                await download_and_decrypt(urls[url_key], out_path, progress)
+                await download_and_decrypt_cached(urls[url_key], out_path, config.glb_cache_dir, progress)
             except Exception as e:
                 raise ValueError(f"Failed to download {label}: {e}")
 

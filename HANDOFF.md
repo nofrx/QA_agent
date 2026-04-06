@@ -19,20 +19,18 @@ backend/
   main.py          → FastAPI server (port 8080)
   pipeline.py      → Orchestrates: download → geometry → textures → compare → report
   dashboard_api.py → SKU lookup via Chrome/Safari AppleScript on dashboard.shopar.ai
-  downloader.py    → Downloads + XOR decrypts GLBs from CloudFront
+  downloader.py    → Downloads + XOR decrypts GLBs from CloudFront (with SHA-256 URL cache)
   crypto.py        → Xorshift32 XOR decryption
   blender_runner.py→ Spawns Blender headless processes
   qa_analyzer.py   → Rules engine: geometry + texture → findings with severity
   qa_rules.py      → Rule definitions (expected vs problematic patterns)
-  report_generator.py → Jinja2 HTML report with embedded texture comparisons
+  report_generator.py → Jinja2 HTML report with file-server texture URLs
   texture_compare.py  → Pixel-level texture diffing with heatmaps
-  config.py        → Loads config.json
+  config.py        → Loads config.json (+ glb_cache_dir)
   storage.py       → Session directory management
 blender/
   geometry_analyzer.py  → Blender script: vertex count, flipped normals, UVs, non-manifold
   texture_extractor.py  → Blender script: extracts PBR textures from GLB materials
-  multi_view_renderer.py → (legacy, removed from pipeline) Blender screenshot renderer
-  issue_renderer.py      → (legacy, removed from pipeline) Issue screenshot renderer
 templates/
   report_template.html → Full HTML report with embedded Three.js viewer
 tests/               → 27 tests (pytest)
@@ -125,7 +123,7 @@ Custom HDRI at `frontend/autoshadow.hdr` (332KB), served at `/static/autoshadow.
 ## Open Items / Next Steps
 
 - API key needs renewal (currently 403)
-- Consider caching downloaded GLBs across sessions for the same SKU
-- The `multi_view_renderer.py` and `issue_renderer.py` Blender scripts are still in `/blender/` but no longer called from pipeline — can be deleted
-- Report file size is ~32MB due to embedded texture comparison heatmaps (base64 PNGs)
+- ~~Consider caching downloaded GLBs across sessions for the same SKU~~ ✓ Implemented — SHA-256 URL-keyed cache in `~/.shoe-qa-cache/glb/`, re-analysis skips downloads
+- ~~The `multi_view_renderer.py` and `issue_renderer.py` Blender scripts are still in `/blender/` but no longer called from pipeline — can be deleted~~ ✓ Deleted, along with wrapper functions in `blender_runner.py`
+- ~~Report file size is ~32MB due to embedded texture comparison heatmaps (base64 PNGs)~~ ✓ Fixed — heatmaps now served via file server route (`/api/reports/{sku}/{session}/files/textures/`) instead of base64 embedding
 - Ralph loop prompt at `.ralph-prompt.md` has 2-iteration validation template

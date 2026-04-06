@@ -72,7 +72,15 @@ def build_geometry_summary(geometry_results: dict) -> dict:
     return summary
 
 
-def build_texture_summary(texture_diffs: dict) -> dict:
+def _image_url(path: str, sku: str, session: str) -> str:
+    """Convert an image file path to a file-server URL, or empty string if missing."""
+    if not path or not os.path.exists(path):
+        return ""
+    filename = os.path.basename(path)
+    return f"/api/reports/{sku}/{session}/files/textures/{filename}"
+
+
+def build_texture_summary(texture_diffs: dict, sku: str = "", session: str = "") -> dict:
     sections = {}
     for tex_type, comparisons in texture_diffs.items():
         section = {}
@@ -88,9 +96,9 @@ def build_texture_summary(texture_diffs: dict) -> dict:
                 "is_meaningful": is_meaningful,
                 "resolution_mismatch": diff.resolution_mismatch,
                 "resolution_note": res_note,
-                "heatmap": image_to_base64(diff.heatmap_path),
-                "overlay": image_to_base64(diff.overlay_path),
-                "side_by_side": image_to_base64(diff.side_by_side_path),
+                "heatmap": _image_url(diff.heatmap_path, sku, session),
+                "overlay": _image_url(diff.overlay_path, sku, session),
+                "side_by_side": _image_url(diff.side_by_side_path, sku, session),
                 "regions": diff.changed_regions,
             }
         sections[tex_type] = section
@@ -131,8 +139,11 @@ def generate_report(
     env.filters['b64'] = image_to_base64
     template = env.get_template("report_template.html")
 
+    sku = scan_data.get("sku", "Unknown")
+    session_name = os.path.basename(session_dir)
+
     geometry_summary = build_geometry_summary(geometry_results)
-    texture_sections = build_texture_summary(texture_diffs)
+    texture_sections = build_texture_summary(texture_diffs, sku=sku, session=session_name)
     issues_data = build_issues_data(geometry_results)
 
     findings_list = []
@@ -149,7 +160,7 @@ def generate_report(
             })
 
     html = template.render(
-        sku=scan_data.get("sku", "Unknown"),
+        sku=sku,
         brand=scan_data.get("brand", "Unknown"),
         color=scan_data.get("color", "Unknown"),
         silhouette=scan_data.get("silhouette", "Unknown"),

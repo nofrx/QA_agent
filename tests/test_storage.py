@@ -9,8 +9,6 @@ def test_create_session():
         assert os.path.isdir(path)
         assert "F5714D05U-K11" in path
         assert os.path.isdir(os.path.join(path, "textures"))
-        assert os.path.isdir(os.path.join(path, "screenshots"))
-        assert os.path.isdir(os.path.join(path, "issues"))
 
 def test_list_reports():
     with tempfile.TemporaryDirectory() as d:

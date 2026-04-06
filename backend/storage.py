@@ -14,8 +14,6 @@ class Storage:
         session_dir = os.path.join(self.reports_dir, sku, timestamp)
         os.makedirs(session_dir, exist_ok=True)
         os.makedirs(os.path.join(session_dir, "textures"), exist_ok=True)
-        os.makedirs(os.path.join(session_dir, "screenshots"), exist_ok=True)
-        os.makedirs(os.path.join(session_dir, "issues"), exist_ok=True)
         metadata = {"sku": sku, "created_at": datetime.now().isoformat(), "status": "in_progress"}
         with open(os.path.join(session_dir, "metadata.json"), 'w') as f:
             json.dump(metadata, f, indent=2)

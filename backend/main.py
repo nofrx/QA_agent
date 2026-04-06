@@ -258,21 +258,25 @@ async def get_report(sku: str, session: str):
     return FileResponse(report_path, media_type="text/html")
 
 
-@app.get("/api/reports/{sku}/{session}/files/{filename}")
-async def get_session_file(sku: str, session: str, filename: str):
-    """Serve GLB and JSON files from a session directory for the 3D viewer."""
+@app.get("/api/reports/{sku}/{session}/files/{filepath:path}")
+async def get_session_file(sku: str, session: str, filepath: str):
+    """Serve GLB, JSON, and PNG files from a session directory (including subdirs like textures/)."""
     sku = os.path.basename(sku)
     session = os.path.basename(session)
-    filename = os.path.basename(filename)  # prevent path traversal
+    # Sanitize each path component to prevent traversal
+    parts = filepath.split("/")
+    parts = [os.path.basename(p) for p in parts if p and p != ".."]
+    if not parts:
+        raise HTTPException(400, "Missing filename")
     # Only allow safe file types
-    ext = os.path.splitext(filename)[1].lower()
-    if ext not in (".glb", ".json"):
-        raise HTTPException(400, "Only .glb and .json files are served")
-    file_path = os.path.join(config.reports_dir, sku, session, filename)
+    ext = os.path.splitext(parts[-1])[1].lower()
+    allowed = {".glb": "model/gltf-binary", ".json": "application/json", ".png": "image/png"}
+    if ext not in allowed:
+        raise HTTPException(400, f"File type {ext} is not served")
+    file_path = os.path.join(config.reports_dir, sku, session, *parts)
     if not os.path.exists(file_path):
-        raise HTTPException(404, f"File not found: {filename}")
-    media_types = {".glb": "model/gltf-binary", ".json": "application/json"}
-    return FileResponse(file_path, media_type=media_types[ext])
+        raise HTTPException(404, f"File not found: {filepath}")
+    return FileResponse(file_path, media_type=allowed[ext])
 
 
 @app.delete("/api/reports/{sku}/{session}")

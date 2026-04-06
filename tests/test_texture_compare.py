@@ -55,7 +55,7 @@ def test_rgba_textures():
     with tempfile.TemporaryDirectory() as d:
         path_a = os.path.join(d, "a.png")
         path_b = os.path.join(d, "b.png")
-        Image.fromarray(img_a, 'RGBA').save(path_a)
-        Image.fromarray(img_b, 'RGBA').save(path_b)
+        Image.fromarray(img_a).save(path_a)
+        Image.fromarray(img_b).save(path_b)
         result = compare_textures(path_a, path_b, d, "rgba")
         assert result.pct_changed > 0
