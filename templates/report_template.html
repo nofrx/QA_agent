@@ -499,38 +499,39 @@ dirLight2.position.set(-2, -1, -1);
 scene.add(dirLight2);
 
 // ── Shader materials ──────────────────────────────────────────────────────────
-const FACE_ORIENT_VERT = `
-  varying vec3 vNormal;
-  void main() {
-    vNormal = normalize(normalMatrix * normal);
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  }
-`;
+
+// Face orientation: uses gl_FrontFacing (winding order) — not view-dependent.
+// Flipped normals = back-facing polygons = red. Correct = blue.
+// Must render with DoubleSide so back-faces are visible.
 const FACE_ORIENT_FRAG = `
-  varying vec3 vNormal;
   void main() {
-    float facing = dot(normalize(vNormal), vec3(0.0, 0.0, 1.0));
     vec3 blue = vec3(0.1, 0.35, 1.0);
     vec3 red  = vec3(1.0, 0.12, 0.08);
-    gl_FragColor = vec4(facing >= 0.0 ? blue : red, 1.0);
+    gl_FragColor = vec4(gl_FrontFacing ? blue : red, 1.0);
   }
 `;
 
 function makeFaceOrientMat() {
   return new THREE.ShaderMaterial({
-    vertexShader: FACE_ORIENT_VERT,
+    vertexShader: `void main() { gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
     fragmentShader: FACE_ORIENT_FRAG,
-    side: THREE.FrontSide,
+    side: THREE.DoubleSide,
   });
 }
 
+// Channel preview: uses MeshBasicMaterial for basecolor (correct color space),
+// custom ShaderMaterial for grayscale channels (roughness/metallic/normal).
 function makeChannelMat(texture, channel) {
-  // channel: 'rgb' | 'r' | 'g' | 'b'
+  if (channel === 'rgb') {
+    // MeshBasicMaterial handles sRGB correctly — no double tone mapping
+    return new THREE.MeshBasicMaterial({ map: texture, side: THREE.FrontSide, toneMapped: false });
+  }
+  // Grayscale channel extraction via shader
   const vert = `
     varying vec2 vUv;
     void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }
   `;
-  const swizzle = { rgb: 'color.rgb', r: 'vec3(color.r)', g: 'vec3(color.g)', b: 'vec3(color.b)' }[channel] || 'color.rgb';
+  const swizzle = { r: 'vec3(color.r)', g: 'vec3(color.g)', b: 'vec3(color.b)' }[channel] || 'color.rgb';
   const frag = `
     uniform sampler2D map;
     varying vec2 vUv;
@@ -539,12 +540,13 @@ function makeChannelMat(texture, channel) {
       gl_FragColor = vec4(${swizzle}, 1.0);
     }
   `;
-  return new THREE.ShaderMaterial({
+  const mat = new THREE.ShaderMaterial({
     uniforms: { map: { value: texture } },
     vertexShader: vert,
     fragmentShader: frag,
     side: THREE.FrontSide,
   });
+  return mat;
 }
 
 function makeWireframeMat() {
@@ -732,7 +734,15 @@ function applyMode(mode) {
   // Always restore first
   restoreMaterials(group);
 
-  if (mode === 'standard') return;
+  // Standard PBR uses original materials with tone mapping
+  if (mode === 'standard') {
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    return;
+  }
+
+  // All non-standard modes: disable tone mapping for accurate preview
+  renderer.toneMapping = THREE.NoToneMapping;
+
   if (mode === 'wireframe') { applyMaterial(group, makeWireframeMat()); return; }
   if (mode === 'face-orient') { applyMaterial(group, makeFaceOrientMat()); return; }
 
@@ -755,7 +765,6 @@ function applyMode(mode) {
   if (tex) {
     applyMaterial(group, makeChannelMat(tex, channel));
   } else {
-    // No texture found — show grey
     applyMaterial(group, new THREE.MeshBasicMaterial({ color: 0x444444 }));
   }
 }
