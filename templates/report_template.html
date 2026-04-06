@@ -455,6 +455,8 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 // ── State ─────────────────────────────────────────────────────────────────────
 const models = { raw: null, touchedup: null, autoshadow: null };
@@ -488,15 +490,19 @@ controls.minDistance = 0.05;
 controls.maxDistance = 10;
 controls.addEventListener('change', render);
 
-// Lighting
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+// Environment map (studio HDRI for PBR reflections)
+const pmremGenerator = new THREE.PMREMGenerator(renderer);
+pmremGenerator.compileEquirectangularShader();
+const roomEnv = pmremGenerator.fromScene(new RoomEnvironment()).texture;
+scene.environment = roomEnv;
+scene.background = null; // keep dark background, only use env for reflections
+
+// Soft fill light (env does most of the work now)
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.15);
 scene.add(ambientLight);
-const dirLight1 = new THREE.DirectionalLight(0xffffff, 2.0);
+const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.8);
 dirLight1.position.set(1, 2, 2);
 scene.add(dirLight1);
-const dirLight2 = new THREE.DirectionalLight(0x8899cc, 0.4);
-dirLight2.position.set(-2, -1, -1);
-scene.add(dirLight2);
 
 // ── Shader materials ──────────────────────────────────────────────────────────
 
