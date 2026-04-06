@@ -65,9 +65,16 @@ def analyze_mesh(obj):
         "size": [round(maxs[i] - mins[i], 4) for i in range(3)],
     }
 
+    # Total mesh surface area (for relative area calculations)
+    total_mesh_area = sum(face.calc_area() for face in bm.faces)
+    result["total_mesh_area"] = round(total_mesh_area, 6)
+
     # Flipped normals — use local neighborhood comparison, not global center.
     # A face is "flipped" if its normal points opposite to the average of its neighbors.
+    # Each flipped face includes its area so downstream can filter insignificant ones.
     flipped = []
+    significant_count = 0
+    area_threshold = 0.0001  # 0.01% of total mesh area
     for face in bm.faces:
         neighbor_normals = []
         for edge in face.edges:
@@ -77,14 +84,22 @@ def analyze_mesh(obj):
         if neighbor_normals:
             avg_neighbor = sum(neighbor_normals, Vector()) / len(neighbor_normals)
             if face.normal.dot(avg_neighbor) < -0.5:
+                face_area = face.calc_area()
+                relative_area = face_area / total_mesh_area if total_mesh_area > 0 else 0
+                is_significant = relative_area > area_threshold
+                if is_significant:
+                    significant_count += 1
                 center = face.calc_center_median()
                 flipped.append({
                     "face_index": face.index,
                     "center": [round(center.x, 4), round(center.y, 4), round(center.z, 4)],
                     "normal": [round(face.normal.x, 4), round(face.normal.y, 4), round(face.normal.z, 4)],
+                    "area": round(face_area, 8),
+                    "relative_area": round(relative_area, 8),
                 })
     result["flipped_normals"] = flipped[:100]
     result["flipped_normals_count"] = len(flipped)
+    result["significant_flipped_normals_count"] = significant_count
 
     # Non-manifold edges
     non_manifold = []
