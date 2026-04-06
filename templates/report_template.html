@@ -490,12 +490,17 @@ controls.minDistance = 0.05;
 controls.maxDistance = 10;
 controls.addEventListener('change', render);
 
-// Environment map (studio HDRI for PBR reflections)
+// Environment map (custom HDRI for PBR reflections)
 const pmremGenerator = new THREE.PMREMGenerator(renderer);
 pmremGenerator.compileEquirectangularShader();
-const roomEnv = pmremGenerator.fromScene(new RoomEnvironment()).texture;
-scene.environment = roomEnv;
-scene.background = null; // keep dark background, only use env for reflections
+new RGBELoader().load('/static/autoshadow.hdr', (hdrTexture) => {
+  const envMap = pmremGenerator.fromEquirectangular(hdrTexture).texture;
+  scene.environment = envMap;
+  scene.background = null; // keep dark background, only use env for reflections
+  hdrTexture.dispose();
+  pmremGenerator.dispose();
+  render();
+});
 
 // Soft fill light (env does most of the work now)
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.15);
