@@ -95,25 +95,25 @@ async def find_scan_by_sku_chrome(api_base: str, sku: str) -> ScanData:
     if not safe_sku:
         raise ValueError(f"Invalid SKU: {sku}")
 
-    # JavaScript that:
-    # 1. Paginates through /api/assets (200 per page, up to 25 pages = 5K assets)
-    # 2. Finds asset with matching sku field (case-insensitive)
-    # 3. Extracts GLB filenames from the canonicalAsset's latest version
-    # 5K assets covers ~2 months of production. Older SKUs need URL mode.
+    # JavaScript that uses Payload CMS where-query to find asset by SKU directly.
+    # Single API call instead of paginating through all assets.
     js_code = (
-        "var sku='" + safe_sku + "'.toUpperCase();"
-        "var found=null;"
-        "for(var p=1;p<=25;p++){"
+        "(function(){"
+        "var sku='" + safe_sku + "';"
         "var x=new XMLHttpRequest();"
-        "x.open('GET','/api/assets?limit=200&page='+p,false);"
+        "x.open('GET','/api/assets?limit=1&where[sku][equals]='+sku,false);"
         "x.send();"
-        "if(x.status!==200)break;"
+        "if(x.status!==200)return 'API_ERROR_'+x.status;"
         "var d=JSON.parse(x.responseText);"
-        "for(var i=0;i<d.docs.length;i++){"
-        "if((d.docs[i].sku||'').toUpperCase()===sku){found=d.docs[i];break;}}"
-        "if(found||!d.hasNextPage)break;}"
-        "if(!found){'NOT_FOUND';}else{"
+        "if(!d.docs||!d.docs.length){"
+        "var x2=new XMLHttpRequest();"
+        "x2.open('GET','/api/assets?limit=1&where[sku][equals]='+sku.toUpperCase(),false);"
+        "x2.send();"
+        "if(x2.status===200){d=JSON.parse(x2.responseText);}"
+        "if(!d.docs||!d.docs.length)return 'NOT_FOUND';}"
+        "var found=d.docs[0];"
         "var cp=found.canonicalAsset;"
+        "if(!cp)return 'NO_CANONICAL';"
         "var vs=cp.versions||[];"
         "var result=null;"
         "for(var vi=vs.length-1;vi>=0;vi--){"
@@ -126,14 +126,14 @@ async def find_scan_by_sku_chrome(api_base: str, sku: str) -> ScanData:
         "if(its.length>0){"
         "var last=its[its.length-1];"
         "result=JSON.stringify({"
-        "sku:sku,source:last.sourceFilename||'',"
+        "sku:sku.toUpperCase(),source:last.sourceFilename||'',"
         "touchedup:last.previewFilename||'',"
         "autoshadow:last.autoShadowFilename||'',"
         "brand:cp.brand||'',color:cp.color||'',"
         "silhouette:cp.silhouette||''});"
         "break;}}}"
         "if(result)break;}"
-        "result||'NO_TOUCHUP';}"
+        "return result||'NO_TOUCHUP';})()"
     )
 
     # Try Chrome first, then Safari as fallback
@@ -209,8 +209,8 @@ async def find_scan_by_sku_chrome(api_base: str, sku: str) -> ScanData:
 
         if output == "NOT_FOUND":
             raise ValueError(
-                f"SKU {sku} not found in recent assets (searched 5000). "
-                "For older models, use URL mode — check the checkbox below."
+                f"SKU {sku} not found in dashboard assets. "
+                "Check the SKU is correct, or use URL mode."
             )
 
         if output == "NO_TOUCHUP":
