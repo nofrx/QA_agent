@@ -88,17 +88,32 @@ def _check_geometry(geom: dict, model_key: str, label: str) -> list:
     if not geom or geom.get("error"):
         return findings
 
-    # Flipped normals
-    count = geom.get("flipped_normals_count", 0)
-    if count > 0:
+    # Flipped normals — use significant count (area-filtered) as primary metric
+    total_count = geom.get("flipped_normals_count", 0)
+    significant_count = geom.get("significant_flipped_normals_count", total_count)
+    if significant_count > 0:
         rule = ALL_RULES["flipped_normals"]
+        note = f" ({total_count} total, {significant_count} visually significant)" if total_count != significant_count else ""
         findings.append(Finding(
             rule_id=rule.id, severity="critical", model=model_key,
-            title=f"{label}: {count} flipped normal{'s' if count != 1 else ''}",
+            title=f"{label}: {significant_count} flipped normal{'s' if significant_count != 1 else ''}{note}",
             explanation=rule.explanation,
             recommendation=rule.what_to_do,
-            data={"count": count, "model": label},
+            data={"count": significant_count, "total_count": total_count, "model": label},
             has_screenshot=True,
+        ))
+    elif total_count > 0:
+        # All flipped normals are on insignificant (sub-pixel) faces
+        findings.append(Finding(
+            rule_id="flipped_normals", severity="info", model=model_key,
+            title=f"{label}: {total_count} flipped normal{'s' if total_count != 1 else ''} (all on insignificant faces, no visual impact)",
+            explanation=(
+                f"Found {total_count} faces with inverted normals, but all are on extremely small faces "
+                "(less than 0.01% of total mesh surface area). These are geometry artifacts from mesh processing "
+                "and have no visible impact in real-time viewers or AR."
+            ),
+            recommendation="No action needed. These are sub-pixel geometry artifacts.",
+            data={"count": 0, "total_count": total_count, "model": label},
         ))
 
     # Negative UVs

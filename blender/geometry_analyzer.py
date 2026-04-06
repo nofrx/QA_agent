@@ -217,7 +217,7 @@ def main():
         }
 
     result["total_issues"] = (
-        result.get("flipped_normals_count", 0)
+        result.get("significant_flipped_normals_count", result.get("flipped_normals_count", 0))
         + result.get("non_manifold_count", 0)
         + result.get("loose_vertices_count", 0)
         + result.get("negative_uv_count", 0)
