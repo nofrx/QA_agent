@@ -85,8 +85,7 @@ async def start_analysis(sku: str):
 class UrlAnalysisRequest(BaseModel):
     sku: str
     raw_url: str
-    touchedup_url: str
-    autoshadow_url: str
+    autoshadow_url: str = ""
     brand: str = "Unknown"
     color: str = "Unknown"
     silhouette: str = "Unknown"
@@ -118,14 +117,13 @@ async def start_analysis_urls(req: UrlAnalysisRequest):
 
     urls = {
         "raw": _fix_url(req.raw_url),
-        "touchedup": _fix_url(req.touchedup_url),
-        "autoshadow": _fix_url(req.autoshadow_url),
     }
+    if req.autoshadow_url:
+        urls["autoshadow"] = _fix_url(req.autoshadow_url)
 
-    # Validate all URLs are present
-    for key, url in urls.items():
-        if not url:
-            raise HTTPException(400, f"Missing URL for {key}")
+    # Validate raw URL is present
+    if not urls["raw"]:
+        raise HTTPException(400, "Missing URL for raw scan")
 
     job_id = _create_job(sku)
 
@@ -151,8 +149,7 @@ async def start_analysis_urls(req: UrlAnalysisRequest):
 async def start_analysis_files(
     sku: str = Form(...),
     raw_file: UploadFile = File(...),
-    touchedup_file: UploadFile = File(...),
-    autoshadow_file: UploadFile = File(...),
+    autoshadow_file: UploadFile = File(None),
 ):
     """Start QA analysis using locally uploaded GLB files."""
     sku = sku.strip().upper()
@@ -170,14 +167,19 @@ async def start_analysis_files(
     file_paths = {}
     for label, upload, filename in [
         ("raw", raw_file, "raw_scan.glb"),
-        ("touchedup", touchedup_file, "touched_up.glb"),
-        ("autoshadow", autoshadow_file, "autoshadow.glb"),
     ]:
         path = os.path.join(session_dir, filename)
         content = await upload.read()
         with open(path, "wb") as f:
             f.write(content)
         file_paths[label] = path
+
+    if autoshadow_file:
+        path = os.path.join(session_dir, "autoshadow.glb")
+        content = await autoshadow_file.read()
+        with open(path, "wb") as f:
+            f.write(content)
+        file_paths["autoshadow"] = path
 
     async def run():
         try:
@@ -186,8 +188,8 @@ async def start_analysis_files(
 
             await on_progress(f"Using uploaded files for {sku}")
             await on_progress(f"  raw scan: {os.path.getsize(file_paths['raw']) / 1024 / 1024:.1f} MB")
-            await on_progress(f"  touched-up: {os.path.getsize(file_paths['touchedup']) / 1024 / 1024:.1f} MB")
-            await on_progress(f"  autoshadow: {os.path.getsize(file_paths['autoshadow']) / 1024 / 1024:.1f} MB")
+            if "autoshadow" in file_paths:
+                await on_progress(f"  autoshadow: {os.path.getsize(file_paths['autoshadow']) / 1024 / 1024:.1f} MB")
 
             # Run pipeline with local_files instead of urls
             report_path, sess_dir = await run_qa_pipeline(

@@ -2,11 +2,11 @@ from backend.qa_rules import ALL_RULES, QARule
 
 
 def test_all_rules_have_required_fields():
-    assert len(ALL_RULES) >= 15
+    assert len(ALL_RULES) >= 12
     for rule_id, rule in ALL_RULES.items():
         assert rule.id == rule_id
         assert rule.category in (
-            "geometry", "texture_raw_vs_touchedup", "texture_touchedup_vs_autoshadow",
+            "geometry", "texture_raw_vs_autoshadow",
             "resolution", "filesize"
         )
         assert rule.severity in ("critical", "warning", "info", "expected")
@@ -23,8 +23,6 @@ def test_geometry_rules_exist():
     assert "negative_uv" in ids
 
 
-def test_texture_rules_cover_both_comparisons():
-    raw_rules = [r for r in ALL_RULES.values() if r.category == "texture_raw_vs_touchedup"]
-    auto_rules = [r for r in ALL_RULES.values() if r.category == "texture_touchedup_vs_autoshadow"]
-    assert len(raw_rules) >= 4  # basecolor, normal, roughness, metallic
-    assert len(auto_rules) >= 4
+def test_texture_rules_cover_raw_vs_autoshadow():
+    auto_rules = [r for r in ALL_RULES.values() if r.category == "texture_raw_vs_autoshadow"]
+    assert len(auto_rules) >= 4  # basecolor, normal (ok + unexpected), roughness, metallic

@@ -27,7 +27,7 @@ function toggleUrlMode() {
 
 function updateSnippet() {
   const sku = document.getElementById('sku-input').value.trim().toUpperCase() || 'YOUR-SKU-HERE';
-  const code = `fetch('/api/scans?search=${sku}').then(r=>r.json()).then(d=>{const s=d.docs.find(s=>s.laterality==='left');if(!s)return console.log('No left scan');const p=s.product;const v=p.versions;const lv=v[v.length-1];const f=lv.files.find(f=>f.laterality==='left'&&f.type==='3d');const it=f.task.three.iterations;const last=it[it.length-1];console.log(JSON.stringify({sku:(p.clientTags||[]).find(t=>t.key==='clientSku')?.value||p.modelCode,raw:'https://dj5e08oeu5ym4.cloudfront.net/3e/'+s.glbFilename,touchedup:'https://dj5e08oeu5ym4.cloudfront.net/3e/'+last.previewFilename,autoshadow:'https://dj5e08oeu5ym4.cloudfront.net/3e/'+last.autoShadowFilename,brand:p.brand||'',color:p.color||'',silhouette:p.silhouette||''},null,2))})`;
+  const code = `fetch('/api/scans?search=${sku}').then(r=>r.json()).then(d=>{const s=d.docs.find(s=>s.laterality==='left');if(!s)return console.log('No left scan');const p=s.product;const v=p.versions;const lv=v[v.length-1];const f=lv.files.find(f=>f.laterality==='left'&&f.type==='3d');const it=f.task.three.iterations;const last=it[it.length-1];console.log(JSON.stringify({sku:(p.clientTags||[]).find(t=>t.key==='clientSku')?.value||p.modelCode,raw:'https://dj5e08oeu5ym4.cloudfront.net/3e/'+s.glbFilename,autoshadow:'https://dj5e08oeu5ym4.cloudfront.net/3e/'+last.autoShadowFilename,brand:p.brand||'',color:p.color||'',silhouette:p.silhouette||''},null,2))})`;
   const pre = document.getElementById('snippet-code');
   if (pre) pre.textContent = code;
 }
@@ -47,7 +47,6 @@ function parseJsonPaste() {
     const data = JSON.parse(textarea.value.trim());
     if (data.sku) document.getElementById('sku-input').value = data.sku;
     if (data.raw) document.getElementById('raw-url').value = data.raw;
-    if (data.touchedup) document.getElementById('touchedup-url').value = data.touchedup;
     if (data.autoshadow) document.getElementById('autoshadow-url').value = data.autoshadow;
     textarea.style.borderColor = '#4ecca3';
     setTimeout(() => textarea.style.borderColor = '', 2000);
@@ -106,13 +105,12 @@ function analyzeSku() {
   let fetchPromise;
   if (currentMode === 'url') {
     const rawUrl = document.getElementById('raw-url').value.trim();
-    const touchedupUrl = document.getElementById('touchedup-url').value.trim();
     const autoshadowUrl = document.getElementById('autoshadow-url').value.trim();
 
-    if (!rawUrl || !touchedupUrl || !autoshadowUrl) {
+    if (!rawUrl) {
       btn.disabled = false;
       progressSection.classList.remove('active');
-      errorCard.querySelector('p').textContent = 'Please fill in all 3 GLB URLs.';
+      errorCard.querySelector('p').textContent = 'Please provide the raw scan GLB URL.';
       errorCard.classList.add('active');
       return;
     }
@@ -120,17 +118,16 @@ function analyzeSku() {
     fetchPromise = fetch('/api/analyze-urls', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ sku, raw_url: rawUrl, touchedup_url: touchedupUrl, autoshadow_url: autoshadowUrl })
+      body: JSON.stringify({ sku, raw_url: rawUrl, autoshadow_url: autoshadowUrl })
     });
   } else if (currentMode === 'file') {
     const rawFile = document.getElementById('raw-file').files[0];
-    const touchedupFile = document.getElementById('touchedup-file').files[0];
     const autoshadowFile = document.getElementById('autoshadow-file').files[0];
 
-    if (!rawFile || !touchedupFile || !autoshadowFile) {
+    if (!rawFile) {
       btn.disabled = false;
       progressSection.classList.remove('active');
-      errorCard.querySelector('p').textContent = 'Please select all 3 GLB files.';
+      errorCard.querySelector('p').textContent = 'Please select the raw scan GLB file.';
       errorCard.classList.add('active');
       return;
     }
@@ -138,8 +135,7 @@ function analyzeSku() {
     const formData = new FormData();
     formData.append('sku', sku);
     formData.append('raw_file', rawFile);
-    formData.append('touchedup_file', touchedupFile);
-    formData.append('autoshadow_file', autoshadowFile);
+    if (autoshadowFile) formData.append('autoshadow_file', autoshadowFile);
 
     fetchPromise = fetch('/api/analyze-files', { method: 'POST', body: formData });
   } else {

@@ -13,7 +13,7 @@ class Finding:
     title: str
     explanation: str
     recommendation: str
-    model: str = ""        # raw, touchedup, autoshadow
+    model: str = ""        # raw, autoshadow
     data: dict = field(default_factory=dict)
     has_screenshot: bool = False
 
@@ -36,7 +36,7 @@ def analyze(geometry_results: dict, texture_diffs: dict, issue_renders: list = N
     findings = []
 
     # ─── Geometry analysis ────────────────────────────────
-    for model_key, label in [("raw", "Raw scan"), ("touchedup", "Touched-up"), ("autoshadow", "AutoShadow")]:
+    for model_key, label in [("raw", "Raw scan"), ("autoshadow", "AutoShadow")]:
         geom = geometry_results.get(model_key, {})
         findings.extend(_check_geometry(geom, model_key, label))
 
@@ -172,27 +172,16 @@ def _check_file_sizes(geometry_results: dict) -> list:
     """Check file size relationships between models."""
     findings = []
     raw_size = geometry_results.get("raw", {}).get("file_size_mb", 0)
-    tu_size = geometry_results.get("touchedup", {}).get("file_size_mb", 0)
     auto_size = geometry_results.get("autoshadow", {}).get("file_size_mb", 0)
 
-    if tu_size > 0 and raw_size > 0 and tu_size > raw_size * 1.1:
-        rule = ALL_RULES["filesize_touchup_larger"]
-        findings.append(Finding(
-            rule_id=rule.id, severity="info", model="touchedup",
-            title=f"Touched-up ({tu_size:.1f} MB) is larger than raw scan ({raw_size:.1f} MB)",
-            explanation=rule.explanation,
-            recommendation=rule.what_to_do,
-            data={"raw_mb": raw_size, "touchedup_mb": tu_size},
-        ))
-
-    if auto_size > 0 and tu_size > 0 and auto_size > tu_size * 2:
+    if auto_size > 0 and raw_size > 0 and auto_size > raw_size * 2:
         rule = ALL_RULES["filesize_autoshadow_much_larger"]
         findings.append(Finding(
             rule_id=rule.id, severity="info", model="autoshadow",
-            title=f"AutoShadow ({auto_size:.1f} MB) is {auto_size/tu_size:.1f}x larger than touched-up ({tu_size:.1f} MB)",
+            title=f"AutoShadow ({auto_size:.1f} MB) is {auto_size/raw_size:.1f}x larger than raw scan ({raw_size:.1f} MB)",
             explanation=rule.explanation,
             recommendation=rule.what_to_do,
-            data={"touchedup_mb": tu_size, "autoshadow_mb": auto_size},
+            data={"raw_mb": raw_size, "autoshadow_mb": auto_size},
         ))
 
     return findings
@@ -202,21 +191,11 @@ def _check_texture_resolution(geometry_results: dict) -> list:
     """Check texture resolutions across models."""
     findings = []
 
-    for model_key, label in [("raw", "Raw scan"), ("touchedup", "Touched-up"), ("autoshadow", "AutoShadow")]:
+    for model_key, label in [("raw", "Raw scan"), ("autoshadow", "AutoShadow")]:
         geom = geometry_results.get(model_key, {})
         for tex in geom.get("textures", []):
             if not tex.get("is_4k") and tex.get("width", 0) > 0:
-                if model_key == "touchedup":
-                    # Touched-up intentionally uses smaller textures — info only
-                    rule = ALL_RULES["tex_resolution_touchedup_optimized"]
-                    findings.append(Finding(
-                        rule_id=rule.id, severity="info", model=model_key,
-                        title=f"Touched-up: {tex['name']} is {tex['width']}x{tex['height']} (intentional optimization)",
-                        explanation=rule.explanation,
-                        recommendation=rule.what_to_do,
-                        data={"width": tex["width"], "height": tex["height"], "name": tex["name"]},
-                    ))
-                elif model_key == "autoshadow":
+                if model_key == "autoshadow":
                     # AutoShadow must produce 4K — flag as warning
                     rule = ALL_RULES["tex_resolution_not_4k"]
                     findings.append(Finding(
@@ -250,94 +229,16 @@ def _check_texture_diffs(texture_diffs: dict) -> list:
     for tex_type in ["basecolor", "normal", "roughness", "metallic"]:
         comparisons = texture_diffs.get(tex_type, {})
 
-        # ─── Raw vs Touched-up ────────────────────────
-        diff = comparisons.get("raw_vs_touchedup")
+        # ─── Raw vs AutoShadow ────────────────────────
+        diff = comparisons.get("raw_vs_autoshadow")
         if diff:
-            findings.extend(_check_raw_vs_touchedup(tex_type, diff))
-
-        # ─── Touched-up vs AutoShadow ─────────────────
-        diff = comparisons.get("touchedup_vs_autoshadow")
-        if diff:
-            findings.extend(_check_touchedup_vs_autoshadow(tex_type, diff))
+            findings.extend(_check_raw_vs_autoshadow(tex_type, diff))
 
     return findings
 
 
-_UV_REORG_NOTE = (
-    " Note: UV islands were reorganized (logos cut out and repositioned for shoe mirroring preparation), "
-    "so part of the pixel difference reflects UV layout changes rather than purely artist edits — "
-    "the comparison is between different UV layouts."
-)
-_BAKE_EXTEND_NOTE = (
-    " Background areas outside UV islands show extended pixels from Blender's bake 'extend' fill — "
-    "this is intentional seam prevention, not an issue."
-)
-
-
-def _check_raw_vs_touchedup(tex_type: str, diff) -> list:
-    """Analyze raw scan vs touched-up texture differences."""
-    findings = []
-    pct = diff.pct_changed
-    max_d = diff.max_diff
-
-    tex_label = tex_type.replace("_", " ").title()
-
-    if tex_type == "basecolor":
-        rule = ALL_RULES["tex_raw_touchup_basecolor"]
-        findings.append(Finding(
-            rule_id=rule.id, severity="expected", model="touchedup",
-            title=f"{tex_label}: {pct}% changed by artist",
-            explanation=rule.explanation + _UV_REORG_NOTE + _BAKE_EXTEND_NOTE,
-            recommendation=rule.what_to_do,
-            data={"pct_changed": pct, "max_diff": max_d},
-        ))
-
-    elif tex_type == "normal":
-        # Check for doubled normals: if mean diff is very high (>100) it may be doubled
-        if diff.mean_diff > 100 and pct > 50:
-            rule = ALL_RULES["tex_raw_touchup_normal_doubled"]
-            findings.append(Finding(
-                rule_id=rule.id, severity="critical", model="touchedup",
-                title=f"Normal map may be doubled (mean diff: {diff.mean_diff:.0f}, {pct}% changed)",
-                explanation=rule.explanation,
-                recommendation=rule.what_to_do,
-                data={"pct_changed": pct, "mean_diff": diff.mean_diff, "max_diff": max_d},
-            ))
-        else:
-            rule = ALL_RULES["tex_raw_touchup_normal"]
-            findings.append(Finding(
-                rule_id=rule.id, severity="expected", model="touchedup",
-                title=f"{tex_label}: {pct}% corrected by artist",
-                explanation=rule.explanation + _UV_REORG_NOTE + _BAKE_EXTEND_NOTE,
-                recommendation=rule.what_to_do,
-                data={"pct_changed": pct, "max_diff": max_d},
-            ))
-
-    elif tex_type == "roughness":
-        rule = ALL_RULES["tex_raw_touchup_roughness"]
-        findings.append(Finding(
-            rule_id=rule.id, severity="expected", model="touchedup",
-            title=f"{tex_label}: {pct}% corrected by artist",
-            explanation=rule.explanation + _UV_REORG_NOTE + _BAKE_EXTEND_NOTE,
-            recommendation=rule.what_to_do,
-            data={"pct_changed": pct, "max_diff": max_d},
-        ))
-
-    elif tex_type == "metallic":
-        rule = ALL_RULES["tex_raw_touchup_metallic"]
-        findings.append(Finding(
-            rule_id=rule.id, severity="expected", model="touchedup",
-            title=f"{tex_label}: {pct}% corrected by artist",
-            explanation=rule.explanation + _UV_REORG_NOTE + _BAKE_EXTEND_NOTE,
-            recommendation=rule.what_to_do,
-            data={"pct_changed": pct, "max_diff": max_d},
-        ))
-
-    return findings
-
-
-def _check_touchedup_vs_autoshadow(tex_type: str, diff) -> list:
-    """Analyze touched-up vs autoshadow texture differences."""
+def _check_raw_vs_autoshadow(tex_type: str, diff) -> list:
+    """Analyze raw scan vs autoshadow texture differences."""
     findings = []
     pct = diff.pct_changed
     max_d = diff.max_diff
@@ -348,38 +249,38 @@ def _check_touchedup_vs_autoshadow(tex_type: str, diff) -> list:
         rule = ALL_RULES["tex_autoshadow_basecolor"]
         findings.append(Finding(
             rule_id=rule.id, severity="expected", model="autoshadow",
-            title=f"{tex_label}: {pct}% modified by autoshadow (insole darkening)",
+            title=f"{tex_label}: {pct}% changed (raw scan → autoshadow)",
             explanation=rule.explanation,
             recommendation=rule.what_to_do,
             data={"pct_changed": pct, "max_diff": max_d},
         ))
 
     elif tex_type == "normal":
-        # Normal map should NOT change much
-        if pct > 2:
+        # Normal map: large changes with high mean diff may indicate doubled normals
+        if diff.mean_diff > 100 and pct > 50:
             rule = ALL_RULES["tex_autoshadow_normal_unexpected"]
             findings.append(Finding(
                 rule_id=rule.id, severity="warning", model="autoshadow",
-                title=f"Normal map changed {pct}% by autoshadow (should be minimal)",
+                title=f"Normal map significantly changed (mean diff: {diff.mean_diff:.0f}, {pct}% changed)",
                 explanation=rule.explanation,
                 recommendation=rule.what_to_do,
-                data={"pct_changed": pct, "max_diff": max_d},
+                data={"pct_changed": pct, "mean_diff": diff.mean_diff, "max_diff": max_d},
             ))
         else:
             rule = ALL_RULES["tex_autoshadow_normal_ok"]
             findings.append(Finding(
                 rule_id=rule.id, severity="expected", model="autoshadow",
-                title=f"Normal map: {pct}% change (acceptable)",
+                title=f"Normal map: {pct}% change (raw scan → autoshadow)",
                 explanation=rule.explanation,
                 recommendation=rule.what_to_do,
-                data={"pct_changed": pct},
+                data={"pct_changed": pct, "max_diff": max_d},
             ))
 
     elif tex_type == "roughness":
         rule = ALL_RULES["tex_autoshadow_roughness"]
         findings.append(Finding(
             rule_id=rule.id, severity="expected", model="autoshadow",
-            title=f"{tex_label}: {pct}% modified in insole area",
+            title=f"{tex_label}: {pct}% modified (raw scan → autoshadow)",
             explanation=rule.explanation,
             recommendation=rule.what_to_do,
             data={"pct_changed": pct, "max_diff": max_d},
@@ -389,7 +290,7 @@ def _check_touchedup_vs_autoshadow(tex_type: str, diff) -> list:
         rule = ALL_RULES["tex_autoshadow_metallic"]
         findings.append(Finding(
             rule_id=rule.id, severity="expected", model="autoshadow",
-            title=f"{tex_label}: {pct}% modified in insole area",
+            title=f"{tex_label}: {pct}% modified (raw scan → autoshadow)",
             explanation=rule.explanation,
             recommendation=rule.what_to_do,
             data={"pct_changed": pct, "max_diff": max_d},

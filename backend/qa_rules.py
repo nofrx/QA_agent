@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 @dataclass
 class QARule:
     id: str
-    category: str          # geometry, texture_raw_vs_touchedup, texture_touchedup_vs_autoshadow, resolution, filesize
+    category: str          # geometry, texture_raw_vs_autoshadow, resolution, filesize
     severity: str          # critical, warning, info, expected
     title: str
     explanation: str       # 2-3 sentences for a QA artist
@@ -87,96 +87,28 @@ LOOSE_VERTICES = QARule(
 )
 
 
-# ─── TEXTURE: RAW SCAN vs TOUCHED-UP ─────────────────────────
-
-TEX_RAW_TOUCHUP_BASECOLOR = QARule(
-    id="tex_raw_touchup_basecolor",
-    category="texture_raw_vs_touchedup",
-    severity="expected",
-    title="Base color changes (raw → touched-up)",
-    explanation=(
-        "Artist corrected scanning artifacts, color bleeding, seam issues, and material appearance. "
-        "Large percentage of changed pixels is normal — artists often repaint entire areas in Substance Painter. "
-        "More changes generally mean more thorough quality improvement."
-    ),
-    what_to_do="No action needed. This is expected artist work.",
-)
-
-TEX_RAW_TOUCHUP_NORMAL = QARule(
-    id="tex_raw_touchup_normal",
-    category="texture_raw_vs_touchedup",
-    severity="expected",
-    title="Normal map changes (raw → touched-up)",
-    explanation=(
-        "Artist smoothed out scan noise and corrected surface details in the normal map. "
-        "Expected and good quality improvement."
-    ),
-    what_to_do="No action needed unless normal values appear doubled (see separate check).",
-)
-
-TEX_RAW_TOUCHUP_NORMAL_DOUBLED = QARule(
-    id="tex_raw_touchup_normal_doubled",
-    category="texture_raw_vs_touchedup",
-    severity="critical",
-    title="Normal map appears doubled/multiplied",
-    explanation=(
-        "The normal map shows values that appear to be multiplied or applied twice. "
-        "This happens when a normal map is baked on top of an existing normal map without flattening first. "
-        "The result is exaggerated surface detail that looks unnatural — bumps appear twice as deep."
-    ),
-    what_to_do=(
-        "Re-bake the normal map from a flat base, or flatten the existing normal map "
-        "before applying additional details in Substance Painter."
-    ),
-)
-
-TEX_RAW_TOUCHUP_ROUGHNESS = QARule(
-    id="tex_raw_touchup_roughness",
-    category="texture_raw_vs_touchedup",
-    severity="expected",
-    title="Roughness changes (raw → touched-up)",
-    explanation=(
-        "Artist corrected roughness values to match real material properties. "
-        "Raw scan roughness is often noisy or inaccurate. More corrections mean better material fidelity."
-    ),
-    what_to_do="No action needed. This is expected artist work.",
-)
-
-TEX_RAW_TOUCHUP_METALLIC = QARule(
-    id="tex_raw_touchup_metallic",
-    category="texture_raw_vs_touchedup",
-    severity="expected",
-    title="Metallic map changes (raw → touched-up)",
-    explanation=(
-        "Artist corrected metal vs non-metal classification. Raw scan metallic data is often incorrect. "
-        "Proper metallic values are essential for physically-based rendering to look correct."
-    ),
-    what_to_do="No action needed. More corrections indicate better quality.",
-)
-
-
-# ─── TEXTURE: TOUCHED-UP vs AUTOSHADOW ───────────────────────
+# ─── TEXTURE: RAW SCAN vs AUTOSHADOW ─────────────────────────
 
 TEX_AUTOSHADOW_BASECOLOR = QARule(
     id="tex_autoshadow_basecolor",
-    category="texture_touchedup_vs_autoshadow",
+    category="texture_raw_vs_autoshadow",
     severity="expected",
-    title="Base color shadow applied (touched-up → autoshadow)",
+    title="Base color changes (raw scan → autoshadow)",
     explanation=(
-        "The autoshadow script darkened the insole/interior area to simulate ambient occlusion. "
-        "Changes should be concentrated in the shoe opening and interior. "
-        "This is the primary purpose of the autoshadow pipeline."
+        "The autoshadow pipeline applies artist touch-ups and insole shadow to the raw scan. "
+        "Changes include scanning artifact correction, color bleeding fixes, and insole darkening. "
+        "Large percentage of changed pixels is expected."
     ),
-    what_to_do="Verify the shadow looks natural and is only applied to the interior area.",
+    what_to_do="Verify the shadow looks natural and exterior surfaces are not unintentionally darkened.",
 )
 
 TEX_AUTOSHADOW_BASECOLOR_EXTERIOR = QARule(
     id="tex_autoshadow_basecolor_exterior",
-    category="texture_touchedup_vs_autoshadow",
+    category="texture_raw_vs_autoshadow",
     severity="warning",
-    title="Autoshadow modified exterior base color",
+    title="Autoshadow modified exterior base color unexpectedly",
     explanation=(
-        "The autoshadow script appears to have changed base color outside the insole area. "
+        "The autoshadow output appears to have unexpected base color changes outside the insole area. "
         "This may indicate the shadow mask leaked onto the exterior of the shoe, "
         "causing unwanted darkening on visible surfaces."
     ),
@@ -185,46 +117,46 @@ TEX_AUTOSHADOW_BASECOLOR_EXTERIOR = QARule(
 
 TEX_AUTOSHADOW_NORMAL = QARule(
     id="tex_autoshadow_normal_unexpected",
-    category="texture_touchedup_vs_autoshadow",
+    category="texture_raw_vs_autoshadow",
     severity="warning",
-    title="Autoshadow modified normal map",
+    title="Significant normal map changes (raw scan → autoshadow)",
     explanation=(
-        "The autoshadow script should NOT significantly change the normal map. "
-        "Normal map modifications suggest the script is altering surface detail, "
-        "which could introduce visual artifacts on the shoe surface."
+        "The normal map changed significantly between raw scan and autoshadow output. "
+        "While some normal map correction is expected from artist touch-up, large changes "
+        "could indicate the normal map was doubled or the autoshadow script altered surface detail."
     ),
-    what_to_do="Compare the normal maps visually. If surface detail changed, investigate the autoshadow script.",
+    what_to_do="Compare the normal maps visually. If surface detail looks exaggerated, investigate.",
 )
 
 TEX_AUTOSHADOW_NORMAL_OK = QARule(
     id="tex_autoshadow_normal_ok",
-    category="texture_touchedup_vs_autoshadow",
+    category="texture_raw_vs_autoshadow",
     severity="expected",
-    title="Normal map unchanged by autoshadow",
-    explanation="The autoshadow script correctly left the normal map untouched.",
+    title="Normal map changes acceptable (raw scan → autoshadow)",
+    explanation="The normal map changes between raw scan and autoshadow output are within expected range.",
     what_to_do="No action needed.",
 )
 
 TEX_AUTOSHADOW_ROUGHNESS = QARule(
     id="tex_autoshadow_roughness",
-    category="texture_touchedup_vs_autoshadow",
+    category="texture_raw_vs_autoshadow",
     severity="expected",
-    title="Roughness modified in insole area",
+    title="Roughness modified (raw scan → autoshadow)",
     explanation=(
-        "The autoshadow script increased roughness inside the shoe to simulate the matte "
-        "appearance of shoe interiors. This is expected behavior."
+        "Roughness changes between raw scan and autoshadow output include artist corrections "
+        "and insole roughness adjustment. This is expected behavior."
     ),
     what_to_do="No action needed.",
 )
 
 TEX_AUTOSHADOW_METALLIC = QARule(
     id="tex_autoshadow_metallic",
-    category="texture_touchedup_vs_autoshadow",
+    category="texture_raw_vs_autoshadow",
     severity="expected",
-    title="Metallic reduced in insole area",
+    title="Metallic modified (raw scan → autoshadow)",
     explanation=(
-        "The autoshadow script reduced metallic values inside the shoe. "
-        "Shoe interiors are non-metallic, so this correction is expected."
+        "Metallic changes between raw scan and autoshadow output include artist corrections "
+        "and insole metallic reduction. This is expected behavior."
     ),
     what_to_do="No action needed.",
 )
@@ -244,19 +176,6 @@ TEX_RESOLUTION_NOT_4K = QARule(
     what_to_do="Check the autoshadow script resolution settings and re-run to produce 4K output textures.",
 )
 
-TEX_RESOLUTION_TOUCHEDUP_OPTIMIZED = QARule(
-    id="tex_resolution_touchedup_optimized",
-    category="resolution",
-    severity="info",
-    title="Touched-up model uses optimized texture resolution",
-    explanation=(
-        "The touched-up model intentionally uses smaller textures (e.g. 2048x2048) as an optimization "
-        "to reduce working file size. This is the standard artist workflow. "
-        "The autoshadow script will rebake these to full 4K for production output."
-    ),
-    what_to_do="No action needed. Verify the autoshadow output uses 4K textures.",
-)
-
 TEX_RESOLUTION_MISMATCH = QARule(
     id="tex_resolution_mismatch",
     category="resolution",
@@ -273,30 +192,16 @@ TEX_RESOLUTION_MISMATCH = QARule(
 
 # ─── FILE SIZE RULES ─────────────────────────────────────────
 
-FILESIZE_TOUCHUP_LARGER = QARule(
-    id="filesize_touchup_larger",
-    category="filesize",
-    severity="info",
-    title="Touched-up model larger than raw scan",
-    explanation=(
-        "Typically the touched-up model should be smaller because the artist decimates "
-        "the high-density scanner mesh to production polygon count. A larger file may indicate "
-        "the mesh was not decimated, or additional geometry was added."
-    ),
-    what_to_do="Verify the polygon count is appropriate for production (usually 50K-300K faces).",
-)
-
 FILESIZE_AUTOSHADOW_MUCH_LARGER = QARule(
     id="filesize_autoshadow_much_larger",
     category="filesize",
     severity="info",
-    title="AutoShadow file larger than touched-up (expected)",
+    title="AutoShadow file significantly larger than raw scan",
     explanation=(
-        "The autoshadow model is larger because the autoshadow script rebakes textures from the "
-        "optimized 2K touched-up input up to 4K production resolution. This is the intended pipeline "
-        "behavior — touched-up uses small textures for working efficiency, autoshadow produces the final 4K output."
+        "The autoshadow model may be larger than the raw scan due to rebaked 4K textures "
+        "and additional processing. This is generally expected pipeline behavior."
     ),
-    what_to_do="No action needed. Verify the file size increase is proportional to the 2K→4K upscale (roughly 4x texture data).",
+    what_to_do="No action needed. Verify the file size increase is reasonable.",
 )
 
 
@@ -304,11 +209,9 @@ FILESIZE_AUTOSHADOW_MUCH_LARGER = QARule(
 
 ALL_RULES = {r.id: r for r in [
     FLIPPED_NORMALS, NEGATIVE_UVS, OUT_OF_RANGE_UVS, NON_MANIFOLD, LOOSE_VERTICES,
-    TEX_RAW_TOUCHUP_BASECOLOR, TEX_RAW_TOUCHUP_NORMAL, TEX_RAW_TOUCHUP_NORMAL_DOUBLED,
-    TEX_RAW_TOUCHUP_ROUGHNESS, TEX_RAW_TOUCHUP_METALLIC,
     TEX_AUTOSHADOW_BASECOLOR, TEX_AUTOSHADOW_BASECOLOR_EXTERIOR,
     TEX_AUTOSHADOW_NORMAL, TEX_AUTOSHADOW_NORMAL_OK,
     TEX_AUTOSHADOW_ROUGHNESS, TEX_AUTOSHADOW_METALLIC,
-    TEX_RESOLUTION_NOT_4K, TEX_RESOLUTION_TOUCHEDUP_OPTIMIZED, TEX_RESOLUTION_MISMATCH,
-    FILESIZE_TOUCHUP_LARGER, FILESIZE_AUTOSHADOW_MUCH_LARGER,
+    TEX_RESOLUTION_NOT_4K, TEX_RESOLUTION_MISMATCH,
+    FILESIZE_AUTOSHADOW_MUCH_LARGER,
 ]}

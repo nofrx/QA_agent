@@ -29,8 +29,7 @@
       <div class="mode-label">Paste CloudFront URLs</div>
       <div class="url-fields">
         <input type="text" id="raw-url" placeholder="Raw scan GLB URL" autocomplete="off">
-        <input type="text" id="touchedup-url" placeholder="Touched-up GLB URL" autocomplete="off">
-        <input type="text" id="autoshadow-url" placeholder="AutoShadow GLB URL" autocomplete="off">
+        <input type="text" id="autoshadow-url" placeholder="AutoShadow GLB URL (optional)" autocomplete="off">
         <details class="helper-details">
           <summary>Get URLs from dashboard console</summary>
           <pre id="snippet-code"></pre>
@@ -50,12 +49,7 @@
           <span class="file-name" id="raw-file-name">No file chosen</span>
         </label>
         <label class="file-input-label">
-          Touched-up GLB
-          <input type="file" id="touchedup-file" accept=".glb" onchange="updateFileLabel(this)">
-          <span class="file-name" id="touchedup-file-name">No file chosen</span>
-        </label>
-        <label class="file-input-label">
-          AutoShadow GLB
+          AutoShadow GLB (optional)
           <input type="file" id="autoshadow-file" accept=".glb" onchange="updateFileLabel(this)">
           <span class="file-name" id="autoshadow-file-name">No file chosen</span>
         </label>

@@ -45,7 +45,7 @@ def classify_issue_severity(issue_type: str, count: int) -> str:
 
 def build_geometry_summary(geometry_results: dict) -> dict:
     summary = {}
-    for model_key in ["raw", "touchedup", "autoshadow"]:
+    for model_key in ["raw", "autoshadow"]:
         geom = geometry_results.get(model_key, {})
         issues = []
         for issue_key, label in [
@@ -110,7 +110,7 @@ def build_issues_data(geometry_results: dict) -> dict:
     Only includes visually significant flipped normals (relative_area > 0.01%)."""
     area_threshold = 0.0001
     data = {}
-    for model_key in ["raw", "touchedup", "autoshadow"]:
+    for model_key in ["raw", "autoshadow"]:
         geom = geometry_results.get(model_key, {})
         # Collect only significant flipped normal positions for viewer markers
         flipped = []

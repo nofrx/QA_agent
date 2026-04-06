@@ -35,7 +35,7 @@ async def run_qa_pipeline(
     Modes:
     - auto: look up SKU on dashboard, download from CloudFront
     - urls: download from provided CloudFront URLs
-    - local_files: use already-saved local GLB files ({"raw": path, "touchedup": path, "autoshadow": path})
+    - local_files: use already-saved local GLB files ({"raw": path, "autoshadow": path})
     """
     storage = Storage(config.reports_dir)
 
@@ -56,8 +56,7 @@ async def run_qa_pipeline(
     if local_files:
         session_dir = session_dir_override or storage.create_session(sku)
         raw_path = local_files["raw"]
-        touchedup_path = local_files["touchedup"]
-        autoshadow_path = local_files["autoshadow"]
+        autoshadow_path = local_files.get("autoshadow")
 
     else:
         if not urls:
@@ -70,12 +69,10 @@ async def run_qa_pipeline(
                 urls = {}
                 if scan_data.raw_scan_filename:
                     urls["raw"] = f"{config.cloudfront_base}/{scan_data.raw_scan_filename}"
-                if scan_data.touchedup_filename:
-                    urls["touchedup"] = f"{config.cloudfront_base}/{scan_data.touchedup_filename}"
                 if scan_data.autoshadow_filename:
                     urls["autoshadow"] = f"{config.cloudfront_base}/{scan_data.autoshadow_filename}"
-                if not urls.get("raw") or not urls.get("touchedup"):
-                    raise ValueError(f"SKU {sku} is missing raw scan or touched-up model")
+                if not urls.get("raw"):
+                    raise ValueError(f"SKU {sku} is missing raw scan model")
             except Exception as e:
                 raise ValueError(f"API lookup failed: {e}. Use URL mode instead.")
         else:
@@ -83,13 +80,12 @@ async def run_qa_pipeline(
 
         session_dir = session_dir_override or storage.create_session(sku)
         raw_path = os.path.join(session_dir, "raw_scan.glb")
-        touchedup_path = os.path.join(session_dir, "touched_up.glb")
         autoshadow_path = os.path.join(session_dir, "autoshadow.glb") if "autoshadow" in urls else None
 
         # ── Parallel downloads ─────────────────────────────────────────────────
         t0 = time.time()
-        model_count = 2 + (1 if autoshadow_path else 0)
-        await progress(f"Downloading {model_count} models in parallel...")
+        model_count = 1 + (1 if autoshadow_path else 0)
+        await progress(f"Downloading {model_count} model{'s' if model_count > 1 else ''} in parallel...")
 
         async def _download(label, url_key, out_path):
             try:
@@ -99,7 +95,6 @@ async def run_qa_pipeline(
 
         download_tasks = [
             _download("raw scan", "raw", raw_path),
-            _download("touched-up", "touchedup", touchedup_path),
         ]
         if autoshadow_path:
             download_tasks.append(_download("autoshadow", "autoshadow", autoshadow_path))
@@ -111,32 +106,30 @@ async def run_qa_pipeline(
     # ── Step 4: Parallel geometry analysis ────────────────────────────────────
     loop = asyncio.get_event_loop()
     t0 = time.time()
-    model_count = 2 + (1 if autoshadow_path else 0)
-    await progress(f"Analyzing geometry ({model_count} models in parallel)...")
+    model_count = 1 + (1 if autoshadow_path else 0)
+    await progress(f"Analyzing geometry ({model_count} model{'s' if model_count > 1 else ''} in parallel)...")
 
     geom_tasks = [
         loop.run_in_executor(None, run_geometry_analysis, config.blender_path, raw_path,        os.path.join(session_dir, "geometry_raw.json")),
-        loop.run_in_executor(None, run_geometry_analysis, config.blender_path, touchedup_path,  os.path.join(session_dir, "geometry_touchedup.json")),
     ]
     if autoshadow_path:
         geom_tasks.append(loop.run_in_executor(None, run_geometry_analysis, config.blender_path, autoshadow_path, os.path.join(session_dir, "geometry_autoshadow.json")))
 
     geom_results_list = await asyncio.gather(*geom_tasks)
-    raw_geom, touchedup_geom = geom_results_list[0], geom_results_list[1]
-    autoshadow_geom = geom_results_list[2] if autoshadow_path else {}
+    raw_geom = geom_results_list[0]
+    autoshadow_geom = geom_results_list[1] if autoshadow_path else {}
 
     await progress(f"  Raw: {raw_geom.get('vertices', 0):,} verts, {raw_geom.get('total_issues', 0)} issues")
-    await progress(f"  Touched-up: {touchedup_geom.get('vertices', 0):,} verts, {touchedup_geom.get('total_issues', 0)} issues")
     if autoshadow_path:
         await progress(f"  AutoShadow: {autoshadow_geom.get('vertices', 0):,} verts, {autoshadow_geom.get('total_issues', 0)} issues")
     await progress(f"  Geometry done in {_t(t0)}")
 
-    geometry_results = {"raw": raw_geom, "touchedup": touchedup_geom, "autoshadow": autoshadow_geom}
+    geometry_results = {"raw": raw_geom, "autoshadow": autoshadow_geom}
 
     # ── Step 5: Parallel texture extraction ───────────────────────────────────
     tex_dir = os.path.join(session_dir, "textures")
     t0 = time.time()
-    await progress(f"Extracting textures ({model_count} models in parallel)...")
+    await progress(f"Extracting textures ({model_count} model{'s' if model_count > 1 else ''} in parallel)...")
 
     async def _extract(label, path):
         try:
@@ -149,14 +142,13 @@ async def run_qa_pipeline(
 
     tex_tasks = [
         _extract("raw scan", raw_path),
-        _extract("touched-up", touchedup_path),
     ]
     if autoshadow_path:
         tex_tasks.append(_extract("autoshadow", autoshadow_path))
 
     tex_results_list = await asyncio.gather(*tex_tasks)
-    raw_tex, touchedup_tex = tex_results_list[0], tex_results_list[1]
-    autoshadow_tex = tex_results_list[2] if autoshadow_path else {"textures": {}}
+    raw_tex = tex_results_list[0]
+    autoshadow_tex = tex_results_list[1] if autoshadow_path else {"textures": {}}
     await progress(f"  Texture extraction done in {_t(t0)}")
 
     # ── Step 6: Texture comparison ────────────────────────────────────────────
@@ -166,14 +158,11 @@ async def run_qa_pipeline(
 
     async def _compare(tex_type):
         raw_t = raw_tex.get("textures", {}).get(tex_type, {}).get("path")
-        touchedup_t = touchedup_tex.get("textures", {}).get(tex_type, {}).get("path")
         autoshadow_t = autoshadow_tex.get("textures", {}).get(tex_type, {}).get("path")
         comparisons = {}
         tasks = []
-        if raw_t and touchedup_t:
-            tasks.append(("raw_vs_touchedup", loop.run_in_executor(None, compare_textures, raw_t, touchedup_t, tex_dir, f"{tex_type}_raw_vs_touchedup")))
-        if touchedup_t and autoshadow_t:
-            tasks.append(("touchedup_vs_autoshadow", loop.run_in_executor(None, compare_textures, touchedup_t, autoshadow_t, tex_dir, f"{tex_type}_touchedup_vs_autoshadow")))
+        if raw_t and autoshadow_t:
+            tasks.append(("raw_vs_autoshadow", loop.run_in_executor(None, compare_textures, raw_t, autoshadow_t, tex_dir, f"{tex_type}_raw_vs_autoshadow")))
         if tasks:
             results = await asyncio.gather(*[t for _, t in tasks])
             for (name, _), result in zip(tasks, results):
@@ -199,7 +188,6 @@ async def run_qa_pipeline(
     session_name = os.path.basename(session_dir)
     glb_urls = {
         "raw":        f"/api/reports/{sku}/{session_name}/files/raw_scan.glb",
-        "touchedup":  f"/api/reports/{sku}/{session_name}/files/touched_up.glb",
     }
     if autoshadow_path:
         glb_urls["autoshadow"] = f"/api/reports/{sku}/{session_name}/files/autoshadow.glb"
