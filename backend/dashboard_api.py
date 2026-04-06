@@ -136,7 +136,8 @@ async def find_scan_by_sku_chrome(api_base: str, sku: str) -> ScanData:
         "result||'NO_TOUCHUP';}"
     )
 
-    applescript = (
+    # Try Chrome first, then Safari as fallback
+    applescript_chrome = (
         'tell application "Google Chrome"\n'
         '    set windowCount to count of windows\n'
         '    repeat with w from 1 to windowCount\n'
@@ -153,6 +154,38 @@ async def find_scan_by_sku_chrome(api_base: str, sku: str) -> ScanData:
         '    return "NO_DASHBOARD_TAB"\n'
         'end tell'
     )
+
+    applescript_safari = (
+        'tell application "Safari"\n'
+        '    set windowCount to count of windows\n'
+        '    repeat with w from 1 to windowCount\n'
+        '        set tabCount to count of tabs of window w\n'
+        '        repeat with i from 1 to tabCount\n'
+        '            set tabURL to URL of tab i of window w\n'
+        '            if tabURL contains "dashboard.shopar.ai" then\n'
+        '                set jsResult to do JavaScript "' + js_code + '" in tab i of window w\n'
+        '                return jsResult\n'
+        '            end if\n'
+        '        end repeat\n'
+        '    end repeat\n'
+        '    return "NO_DASHBOARD_TAB"\n'
+        'end tell'
+    )
+
+    # Try Chrome, fall back to Safari
+    applescript = applescript_chrome
+    import subprocess as _sp
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.scpt', delete=False) as _f:
+        _f.write(applescript_chrome)
+        _chrome_path = _f.name
+    try:
+        _r = _sp.run(["osascript", _chrome_path], capture_output=True, text=True, timeout=10)
+        if _r.returncode != 0 or "NO_DASHBOARD_TAB" in (_r.stdout.strip()):
+            applescript = applescript_safari
+    except Exception:
+        applescript = applescript_safari
+    finally:
+        os.unlink(_chrome_path)
 
     with tempfile.NamedTemporaryFile(mode='w', suffix='.scpt', delete=False) as f:
         f.write(applescript)
