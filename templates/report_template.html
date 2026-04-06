@@ -248,7 +248,7 @@
             <label>Model</label>
             <button class="vbtn active" id="btn-raw"        onclick="switchModel('raw')">Raw Scan</button>
             <button class="vbtn"        id="btn-touchedup"  onclick="switchModel('touchedup')">Touched-Up</button>
-            <button class="vbtn"        id="btn-autoshadow" onclick="switchModel('autoshadow')">AutoShadow</button>
+            {% if glb_urls.autoshadow %}<button class="vbtn"        id="btn-autoshadow" onclick="switchModel('autoshadow')">AutoShadow</button>{% endif %}
           </div>
           <div class="ctrl-sep"></div>
           <div class="ctrl-group">
@@ -392,29 +392,31 @@
     </div>
     <div class="section-body">
       <table class="summary-table">
-        <thead><tr><th>Metric</th><th>Raw Scan</th><th>Touched-Up</th><th>AutoShadow</th></tr></thead>
+        {% set has_autoshadow = geometry.autoshadow and geometry.autoshadow.vertices %}
+        <thead><tr><th>Metric</th><th>Raw Scan</th><th>Touched-Up</th>{% if has_autoshadow %}<th>AutoShadow</th>{% endif %}</tr></thead>
         <tbody>
           <tr>
             <td class="label">Vertices<span class="note">Total mesh vertex count</span></td>
             <td>{{ "{:,}".format(geometry.raw.vertices) }}</td>
             <td>{{ "{:,}".format(geometry.touchedup.vertices) }}</td>
-            <td>{{ "{:,}".format(geometry.autoshadow.vertices) }}</td>
+            {% if has_autoshadow %}<td>{{ "{:,}".format(geometry.autoshadow.vertices) }}</td>{% endif %}
           </tr>
           <tr>
             <td class="label">Faces<span class="note">Total polygon count</span></td>
             <td>{{ "{:,}".format(geometry.raw.faces) }}</td>
             <td>{{ "{:,}".format(geometry.touchedup.faces) }}</td>
-            <td>{{ "{:,}".format(geometry.autoshadow.faces) }}</td>
+            {% if has_autoshadow %}<td>{{ "{:,}".format(geometry.autoshadow.faces) }}</td>{% endif %}
           </tr>
           <tr>
             <td class="label">File Size</td>
             <td>{{ "%.1f"|format(geometry.raw.file_size_mb) }} MB</td>
             <td>{{ "%.1f"|format(geometry.touchedup.file_size_mb) }} MB</td>
-            <td>{{ "%.1f"|format(geometry.autoshadow.file_size_mb) }} MB</td>
+            {% if has_autoshadow %}<td>{{ "%.1f"|format(geometry.autoshadow.file_size_mb) }} MB</td>{% endif %}
           </tr>
           <tr>
             <td class="label">Textures<span class="note">Production target: 4096×4096</span></td>
-            {% for key in ['raw', 'touchedup', 'autoshadow'] %}
+            {% set model_keys = ['raw', 'touchedup', 'autoshadow'] if has_autoshadow else ['raw', 'touchedup'] %}
+            {% for key in model_keys %}
             <td>
               {% for t in geometry[key].textures %}{{ t.name }} ({{ t.width }}x{{ t.height }}){% if not t.is_4k %} <span style="color:var(--orange)">&#9888;</span>{% endif %}<br>{% endfor %}
             </td>
@@ -712,7 +714,8 @@ window.switchModel = function(key) {
   currentModel = key;
 
   ['raw','touchedup','autoshadow'].forEach(k => {
-    document.getElementById('btn-' + k).classList.toggle('active', k === key);
+    const btn = document.getElementById('btn-' + k);
+    if (btn) btn.classList.toggle('active', k === key);
   });
 
   // Re-apply current mode to new model
