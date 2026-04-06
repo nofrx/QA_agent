@@ -434,7 +434,7 @@
 <script>
 // ── GLB URLs and issues data injected by report generator ────────────────────
 const GLB_URLS = {{ glb_urls | tojson }};
-const ISSUES_DATA = {{ issues_data }};
+const ISSUES_DATA = {{ issues_data | safe }};
 
 // ── Utility ──────────────────────────────────────────────────────────────────
 function toggleSection(id) { document.getElementById(id).classList.toggle('collapsed'); }
