@@ -284,6 +284,25 @@
     #viewer-layout.with-panel { grid-template-columns: 1fr; }
     #tickets-panel { border-left: none; border-top: 1px solid var(--border); max-height: 400px; }
   }
+  .save-status {
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 10px;
+    background: var(--bg2);
+    color: var(--dim);
+  }
+  .save-status.saving { color: var(--orange); }
+  .save-status.saved { color: var(--green); }
+  .save-status.error { color: var(--red); }
+  .ticket-thumb {
+    width: 100%;
+    max-height: 100px;
+    object-fit: contain;
+    border-radius: 4px;
+    margin-top: 6px;
+    background: #000;
+    cursor: zoom-in;
+  }
   #viewer-status {
     position: absolute;
     bottom: 12px;
@@ -449,6 +468,7 @@
       <aside id="tickets-panel">
         <div id="tickets-panel-header">
           <h3>Annotations<span class="ticket-count" id="ticket-count-badge">0</span></h3>
+          <div id="save-status" class="save-status saved">Saved</div>
         </div>
         <div id="tickets-list">
           <div id="tickets-empty">No annotations yet. Toggle <strong>Annotate</strong> mode and click on the model to mark a problem area.</div>
@@ -620,6 +640,9 @@
 // ── GLB URLs and issues data injected by report generator ────────────────────
 const GLB_URLS = {{ glb_urls | tojson }};
 const ISSUES_DATA = {{ issues_data | safe }};
+const REPORT_SKU = {{ sku | tojson }};
+const REPORT_SESSION = {{ session_name | tojson }};
+const TICKETS_API_URL = `/api/reports/${REPORT_SKU}/${REPORT_SESSION}/tickets`;
 
 // ── Utility ──────────────────────────────────────────────────────────────────
 function toggleSection(id) { document.getElementById(id).classList.toggle('collapsed'); }
@@ -655,7 +678,7 @@ const loadingMsg = document.getElementById('viewer-loading-msg');
 const statusEl = document.getElementById('viewer-status');
 
 // ── Renderer setup ────────────────────────────────────────────────────────────
-renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.NeutralToneMapping;
@@ -1189,10 +1212,25 @@ canvas.addEventListener('mousemove', function(event) {
   render();
 });
 
+function captureScreenshot() {
+  // Render then capture (preserveDrawingBuffer is false by default; render right before reading)
+  render();
+  try {
+    return renderer.domElement.toDataURL('image/png');
+  } catch (e) {
+    console.warn('Screenshot capture failed', e);
+    return null;
+  }
+}
+
 function finalizePaint() {
   if (!activePaintTicket) return;
+  // Capture screenshot of the viewer at this moment
+  const shot = captureScreenshot();
+  if (shot) activePaintTicket.screenshot = shot;
   activePaintTicket = null;
   renderTicketsPanel();
+  scheduleSave();
 }
 
 canvas.addEventListener('mouseup', finalizePaint);
@@ -1209,6 +1247,7 @@ window.clearAllAnnotations = function() {
   tickets = [];
   renderTicketsPanel();
   render();
+  scheduleSave();
 };
 
 // ── Ticket panel rendering ───────────────────────────────────────────────────
@@ -1229,13 +1268,17 @@ function renderTicketsPanel() {
     card.dataset.ticketId = ticket.id;
     const ts = new Date(ticket.created_at);
     const tsStr = ts.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const thumbHtml = ticket.screenshot
+      ? `<img class="ticket-thumb" src="${ticket.screenshot}" alt="Annotation screenshot" onclick="event.stopPropagation();openLightbox('${ticket.screenshot}')">`
+      : '';
     card.innerHTML = `
       <div class="ticket-card-header">
         <div class="ticket-color-dot" style="background:${ticket.color}"></div>
         <div class="ticket-index">#${idx + 1}</div>
         <button class="ticket-delete" title="Delete" data-action="delete">&times;</button>
       </div>
-      <textarea class="ticket-comment" placeholder="Describe the issue…">${ticket.comment.replace(/</g, '&lt;')}</textarea>
+      ${thumbHtml}
+      <textarea class="ticket-comment" placeholder="Describe the issue…">${(ticket.comment || '').replace(/</g, '&lt;')}</textarea>
       <div class="ticket-meta">
         <span>${MODEL_LABELS[ticket.model_key] || ticket.model_key}</span>
         <span>${tsStr}</span>
@@ -1249,7 +1292,7 @@ function renderTicketsPanel() {
     });
     // Comment editing
     const ta = card.querySelector('.ticket-comment');
-    ta.addEventListener('input', () => { ticket.comment = ta.value; });
+    ta.addEventListener('input', () => { ticket.comment = ta.value; scheduleSave(); });
     // Delete
     card.querySelector('.ticket-delete').addEventListener('click', (e) => {
       e.stopPropagation();
@@ -1280,6 +1323,7 @@ function deleteTicket(id) {
   tickets.splice(idx, 1);
   renderTicketsPanel();
   render();
+  scheduleSave();
 }
 
 function highlightTicketMarker(id, on) {
@@ -1312,6 +1356,97 @@ function flyToTicket(ticket) {
 }
 
 renderTicketsPanel();
+
+// ── Persistence: load + auto-save ────────────────────────────────────────────
+const saveStatusEl = document.getElementById('save-status');
+let saveTimer = null;
+let saveInFlight = false;
+
+function setSaveStatus(state, text) {
+  if (!saveStatusEl) return;
+  saveStatusEl.className = 'save-status ' + state;
+  saveStatusEl.textContent = text;
+}
+
+function scheduleSave() {
+  setSaveStatus('saving', 'Unsaved');
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveTickets, 600);
+}
+
+async function saveTickets() {
+  if (saveInFlight) {
+    // re-schedule after current save finishes
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveTickets, 600);
+    return;
+  }
+  saveInFlight = true;
+  setSaveStatus('saving', 'Saving…');
+  try {
+    const resp = await fetch(TICKETS_API_URL, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(tickets),
+    });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    setSaveStatus('saved', 'Saved');
+  } catch (e) {
+    console.error('Save failed', e);
+    setSaveStatus('error', 'Save failed');
+  } finally {
+    saveInFlight = false;
+  }
+}
+
+async function loadTickets() {
+  try {
+    const resp = await fetch(TICKETS_API_URL);
+    if (!resp.ok) return;
+    const loaded = await resp.json();
+    if (!Array.isArray(loaded)) return;
+    tickets = loaded;
+    // Wait until at least one model is loaded before adding markers
+    const ensureLoaded = () => {
+      if (Object.values(models).some(m => m)) {
+        for (const ticket of tickets) {
+          if (models[ticket.model_key]) addTicketMarkerToScene(ticket);
+        }
+        renderTicketsPanel();
+        render();
+      } else {
+        setTimeout(ensureLoaded, 200);
+      }
+    };
+    ensureLoaded();
+  } catch (e) {
+    console.warn('Load tickets failed', e);
+  }
+}
+
+window.openLightbox = function(src) {
+  let lb = document.getElementById('annotation-lightbox');
+  if (!lb) {
+    lb = document.createElement('div');
+    lb.id = 'annotation-lightbox';
+    lb.className = 'lightbox';
+    lb.innerHTML = '<img>';
+    lb.addEventListener('click', () => lb.classList.remove('active'));
+    document.body.appendChild(lb);
+  }
+  lb.querySelector('img').src = src;
+  lb.classList.add('active');
+};
+
+// Warn before leaving with unsaved changes
+window.addEventListener('beforeunload', (e) => {
+  if (saveInFlight || (saveTimer && saveStatusEl.classList.contains('saving'))) {
+    e.preventDefault();
+    e.returnValue = '';
+  }
+});
+
+loadTickets();
 </script>
 
 </body>

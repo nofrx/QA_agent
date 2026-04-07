@@ -23,6 +23,28 @@ class Storage:
         with open(os.path.join(session_dir, "metadata.json"), 'w') as f:
             json.dump(metadata, f, indent=2)
 
+    def _tickets_path(self, sku: str, session: str) -> str:
+        sku = os.path.basename(sku)
+        session = os.path.basename(session)
+        return os.path.join(self.reports_dir, sku, session, "tickets.json")
+
+    def load_tickets(self, sku: str, session: str) -> list:
+        path = self._tickets_path(sku, session)
+        if not os.path.exists(path):
+            return []
+        try:
+            with open(path) as f:
+                data = json.load(f)
+            return data if isinstance(data, list) else []
+        except Exception:
+            return []
+
+    def save_tickets(self, sku: str, session: str, tickets: list) -> None:
+        path = self._tickets_path(sku, session)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            json.dump(tickets, f, indent=2)
+
     def list_reports(self) -> list[dict]:
         reports = []
         if not os.path.isdir(self.reports_dir):

@@ -164,6 +164,7 @@ def generate_report(
 
     html = template.render(
         sku=sku,
+        session_name=session_name,
         brand=scan_data.get("brand", "Unknown"),
         color=scan_data.get("color", "Unknown"),
         silhouette=scan_data.get("silhouette", "Unknown"),

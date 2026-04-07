@@ -290,6 +290,29 @@ async def get_session_file(sku: str, session: str, filepath: str):
     return FileResponse(file_path, media_type=allowed[ext])
 
 
+@app.get("/api/reports/{sku}/{session}/tickets")
+async def get_tickets(sku: str, session: str):
+    """Return the saved annotation tickets for a session."""
+    return storage.load_tickets(sku, session)
+
+
+@app.put("/api/reports/{sku}/{session}/tickets")
+async def put_tickets(sku: str, session: str, tickets: list):
+    """Replace the annotation tickets for a session."""
+    if not isinstance(tickets, list):
+        raise HTTPException(400, "Body must be a JSON list")
+    for t in tickets:
+        if not isinstance(t, dict):
+            raise HTTPException(400, "Each ticket must be a JSON object")
+    sku_clean = os.path.basename(sku)
+    session_clean = os.path.basename(session)
+    session_dir = os.path.join(config.reports_dir, sku_clean, session_clean)
+    if not os.path.isdir(session_dir):
+        raise HTTPException(404, "Session not found")
+    storage.save_tickets(sku_clean, session_clean, tickets)
+    return {"status": "saved", "count": len(tickets)}
+
+
 @app.delete("/api/reports/{sku}/{session}")
 async def delete_report(sku: str, session: str):
     """Delete a report session."""
