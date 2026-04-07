@@ -1123,13 +1123,17 @@ function buildTicketGroup(ticket) {
   const modelSize = getModelSize(models[ticket.model_key]);
   const radius = modelSize * 0.005;
   const tubeRadius = modelSize * 0.004;
-  const mat = new THREE.MeshBasicMaterial({ color: ticket.color });
+  const mat = new THREE.MeshBasicMaterial({ color: ticket.color, depthTest: true });
+  const outlineMat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.BackSide });
   const points = ticket.points || [];
 
   if (points.length === 1) {
-    // Single point: render as sphere
+    // Single point: render as sphere with black outline
     const sphere = new THREE.Mesh(new THREE.SphereGeometry(radius, 16, 16), mat);
     sphere.position.set(points[0].x, points[0].y, points[0].z);
+    const outline = new THREE.Mesh(new THREE.SphereGeometry(radius * 1.18, 16, 16), outlineMat);
+    outline.position.copy(sphere.position);
+    group.add(outline);
     group.add(sphere);
   } else if (points.length >= 2) {
     // Multi-point: render as tube along Catmull-Rom curve
@@ -1460,6 +1464,57 @@ window.addEventListener('beforeunload', (e) => {
 });
 
 loadTickets();
+
+// ── Keyboard shortcuts ───────────────────────────────────────────────────────
+const COLOR_HOTKEYS = ['#ff2020', '#ff8c00', '#ffd400', '#4fc3f7', '#66bb6a'];
+
+document.addEventListener('keydown', function(e) {
+  // Don't intercept when typing in inputs/textareas
+  if (e.target.matches('input, textarea, select')) return;
+
+  // 'A' toggles annotate mode
+  if ((e.key === 'a' || e.key === 'A') && !e.ctrlKey && !e.metaKey) {
+    e.preventDefault();
+    toggleAnnotateMode();
+    return;
+  }
+
+  // Esc exits annotate mode + clears selection
+  if (e.key === 'Escape') {
+    if (annotateMode) {
+      toggleAnnotateMode();
+    }
+    document.querySelectorAll('.ticket-card.active').forEach(c => c.classList.remove('active'));
+    return;
+  }
+
+  // 1-5 select preset colors (only when annotate mode is on)
+  if (annotateMode && e.key >= '1' && e.key <= '5') {
+    const idx = parseInt(e.key, 10) - 1;
+    const color = COLOR_HOTKEYS[idx];
+    if (color) {
+      const swatch = document.querySelector(`.color-swatch[data-color="${color}"]`);
+      setActiveColor(color, swatch);
+    }
+  }
+});
+
+// Auto-focus comment textarea when a new ticket is created
+const origRenderPanel = renderTicketsPanel;
+let lastTicketCount = 0;
+renderTicketsPanel = function() {
+  const wasNew = tickets.length > lastTicketCount;
+  origRenderPanel();
+  if (wasNew && tickets.length > 0) {
+    // Focus the first card's textarea (newest is at index 0 visually... actually we render in array order)
+    const lastCard = ticketsList.querySelector('.ticket-card:last-child .ticket-comment');
+    if (lastCard && annotateMode) {
+      // Don't auto-focus while still painting
+      setTimeout(() => { if (!activePaintTicket) lastCard.focus(); }, 50);
+    }
+  }
+  lastTicketCount = tickets.length;
+};
 </script>
 
 </body>
