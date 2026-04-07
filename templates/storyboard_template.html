@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>QA Storyboard — {{ sku }}</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --card: #161b22;
+    --bg2: #21262d;
+    --text: #e6edf3;
+    --dim: #8b949e;
+    --border: #30363d;
+    --accent: #4fc3f7;
+    --critical: #ff2020;
+    --warning: #ff8c00;
+    --info: #ffd400;
+    --note: #4fc3f7;
+    --good: #66bb6a;
+    --r: 8px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    margin: 0;
+    padding: 0;
+    line-height: 1.5;
+  }
+  .container { max-width: 1100px; margin: 0 auto; padding: 32px 24px; }
+  .header {
+    border-bottom: 2px solid var(--border);
+    padding-bottom: 20px;
+    margin-bottom: 32px;
+  }
+  .header h1 {
+    margin: 0 0 8px;
+    font-size: 28px;
+    letter-spacing: -0.5px;
+  }
+  .header .subtitle {
+    color: var(--dim);
+    font-size: 14px;
+  }
+  .header .meta {
+    display: flex;
+    gap: 24px;
+    margin-top: 16px;
+    font-size: 13px;
+    color: var(--dim);
+    flex-wrap: wrap;
+  }
+  .header .meta span strong { color: var(--text); }
+  .empty {
+    text-align: center;
+    padding: 80px 24px;
+    color: var(--dim);
+    font-size: 16px;
+    background: var(--card);
+    border-radius: var(--r);
+    border: 1px dashed var(--border);
+  }
+  .ticket {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    margin-bottom: 24px;
+    overflow: hidden;
+    page-break-inside: avoid;
+  }
+  .ticket-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 20px;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+  }
+  .color-badge {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    border: 2px solid rgba(255,255,255,0.15);
+  }
+  .ticket-num {
+    font-size: 18px;
+    font-weight: 700;
+  }
+  .ticket-model {
+    background: var(--bg);
+    color: var(--accent);
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border: 1px solid var(--border);
+  }
+  .ticket-time {
+    margin-left: auto;
+    color: var(--dim);
+    font-size: 12px;
+  }
+  .ticket-body {
+    padding: 20px;
+  }
+  .ticket-screenshot {
+    display: block;
+    max-width: 100%;
+    max-height: 600px;
+    margin: 0 auto 20px;
+    border-radius: 6px;
+    background: #000;
+    border: 1px solid var(--border);
+  }
+  .ticket-no-screenshot {
+    text-align: center;
+    color: var(--dim);
+    padding: 40px;
+    background: #000;
+    border-radius: 6px;
+    margin-bottom: 20px;
+    font-style: italic;
+  }
+  .ticket-comment {
+    background: var(--bg);
+    border-left: 3px solid var(--accent);
+    padding: 14px 18px;
+    border-radius: 0 4px 4px 0;
+    white-space: pre-wrap;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  .ticket-comment.empty-comment {
+    color: var(--dim);
+    font-style: italic;
+    border-left-color: var(--border);
+  }
+  .footer {
+    text-align: center;
+    color: var(--dim);
+    font-size: 12px;
+    padding: 32px 0 16px;
+    border-top: 1px solid var(--border);
+    margin-top: 40px;
+  }
+  @media print {
+    body { background: #fff; color: #222; }
+    .ticket { background: #f8f9fa; border: 1px solid #ddd; box-shadow: none; }
+    .ticket-header { background: #eef1f5; }
+    .ticket-comment { background: #fff; color: #222; }
+    .ticket-model { background: #fff; color: #0366d6; }
+    .ticket { page-break-after: always; }
+    .ticket:last-child { page-break-after: auto; }
+    .header { border-bottom-color: #ddd; }
+  }
+</style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>QA Storyboard</h1>
+      <div class="subtitle">Annotation report for <strong>{{ sku }}</strong></div>
+      <div class="meta">
+        <span><strong>{{ tickets|length }}</strong> annotation{{ '' if tickets|length == 1 else 's' }}</span>
+        {% if brand and brand != 'Unknown' %}<span><strong>Brand:</strong> {{ brand }}</span>{% endif %}
+        {% if color and color != 'Unknown' %}<span><strong>Color:</strong> {{ color }}</span>{% endif %}
+        <span><strong>Generated:</strong> {{ generated_at }}</span>
+      </div>
+    </div>
+
+    {% if tickets %}
+      {% for ticket in tickets %}
+      <div class="ticket">
+        <div class="ticket-header">
+          <div class="color-badge" style="background:{{ ticket.color }}"></div>
+          <div class="ticket-num">#{{ loop.index }}</div>
+          <div class="ticket-model">{{ model_labels.get(ticket.model_key, ticket.model_key) }}</div>
+          <div class="ticket-time">{{ ticket.created_at_pretty }}</div>
+        </div>
+        <div class="ticket-body">
+          {% if ticket.screenshot %}
+          <img class="ticket-screenshot" src="{{ ticket.screenshot }}" alt="Annotation #{{ loop.index }}">
+          {% else %}
+          <div class="ticket-no-screenshot">No screenshot captured</div>
+          {% endif %}
+          {% if ticket.comment %}
+          <div class="ticket-comment">{{ ticket.comment }}</div>
+          {% else %}
+          <div class="ticket-comment empty-comment">No comment provided</div>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="empty">No annotations yet for this report.</div>
+    {% endif %}
+
+    <div class="footer">
+      Generated by Shoe QA Agent &middot; {{ generated_at }}
+    </div>
+  </div>
+</body>
+</html>

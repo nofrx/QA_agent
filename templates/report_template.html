@@ -469,6 +469,7 @@
         <div id="tickets-panel-header">
           <h3>Annotations<span class="ticket-count" id="ticket-count-badge">0</span></h3>
           <div id="save-status" class="save-status saved">Saved</div>
+          <button class="vbtn" id="btn-export-storyboard" onclick="exportStoryboard()" disabled title="Download HTML storyboard">Export</button>
         </div>
         <div id="tickets-list">
           <div id="tickets-empty">No annotations yet. Toggle <strong>Annotate</strong> mode and click on the model to mark a problem area.</div>
@@ -1257,6 +1258,8 @@ const MODEL_LABELS = { raw: 'Raw Scan', source: 'Source', optimised: 'Optimised'
 
 function renderTicketsPanel() {
   ticketCountBadge.textContent = tickets.length;
+  const exportBtn = document.getElementById('btn-export-storyboard');
+  if (exportBtn) exportBtn.disabled = tickets.length === 0;
   if (tickets.length === 0) {
     ticketsList.innerHTML = '<div id="tickets-empty">No annotations yet. Toggle <strong>Annotate</strong> mode and click on the model to mark a problem area.</div>';
     return;
@@ -1423,6 +1426,16 @@ async function loadTickets() {
     console.warn('Load tickets failed', e);
   }
 }
+
+window.exportStoryboard = function() {
+  // Make sure latest changes are saved before exporting
+  const url = `/api/reports/${REPORT_SKU}/${REPORT_SESSION}/storyboard`;
+  if (saveInFlight || (saveTimer && saveStatusEl.classList.contains('saving'))) {
+    saveTickets().then(() => { window.location.href = url; });
+  } else {
+    window.location.href = url;
+  }
+};
 
 window.openLightbox = function(src) {
   let lb = document.getElementById('annotation-lightbox');

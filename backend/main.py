@@ -296,6 +296,63 @@ async def get_tickets(sku: str, session: str):
     return storage.load_tickets(sku, session)
 
 
+@app.get("/api/reports/{sku}/{session}/storyboard")
+async def get_storyboard(sku: str, session: str):
+    """Generate a self-contained HTML storyboard from the saved tickets."""
+    from datetime import datetime
+    from jinja2 import Environment, FileSystemLoader
+    from starlette.responses import Response
+
+    sku_clean = os.path.basename(sku)
+    session_clean = os.path.basename(session)
+    session_dir = os.path.join(config.reports_dir, sku_clean, session_clean)
+    if not os.path.isdir(session_dir):
+        raise HTTPException(404, "Session not found")
+
+    tickets = storage.load_tickets(sku_clean, session_clean)
+
+    # Pretty timestamps
+    for t in tickets:
+        try:
+            dt = datetime.fromisoformat(t.get("created_at", "").replace("Z", "+00:00"))
+            t["created_at_pretty"] = dt.strftime("%Y-%m-%d %H:%M:%S")
+        except Exception:
+            t["created_at_pretty"] = t.get("created_at", "")
+
+    # Pull metadata for context
+    meta_path = os.path.join(session_dir, "metadata.json")
+    meta = {}
+    if os.path.exists(meta_path):
+        with open(meta_path) as f:
+            meta = json.load(f)
+
+    template_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "templates")
+    env = Environment(loader=FileSystemLoader(template_dir), autoescape=True)
+    template = env.get_template("storyboard_template.html")
+
+    html = template.render(
+        sku=sku_clean,
+        brand=meta.get("brand", ""),
+        color=meta.get("color", ""),
+        generated_at=datetime.now().strftime("%Y-%m-%d %H:%M"),
+        tickets=tickets,
+        model_labels={
+            "raw": "Raw Scan",
+            "source": "Source",
+            "optimised": "Optimised",
+            "autoshadow": "AutoShadow",
+        },
+    )
+
+    date_tag = datetime.now().strftime("%Y%m%d_%H%M")
+    filename = f"storyboard_{sku_clean}_{date_tag}.html"
+    return Response(
+        content=html,
+        media_type="text/html",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @app.put("/api/reports/{sku}/{session}/tickets")
 async def put_tickets(sku: str, session: str, tickets: list):
     """Replace the annotation tickets for a session."""
