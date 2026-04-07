@@ -165,15 +165,41 @@
   }
   #btn-clear-annotations:hover { background: rgba(239,83,80,0.25); }
   #btn-annotate.active { background: var(--green); border-color: var(--green); color: #fff; }
-  .annotate-hint { font-size: 11px; color: var(--dim); margin-left: 8px; }
-  .annotate-hint kbd {
+  #btn-finish-ticket {
+    background: var(--accent2);
+    color: #fff;
+    border-color: var(--accent);
+  }
+  #btn-finish-ticket:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
     background: var(--bg2);
-    border: 1px solid var(--border);
-    border-radius: 3px;
-    padding: 1px 5px;
+    color: var(--dim);
+    border-color: var(--border);
+  }
+  #btn-finish-ticket:not(:disabled) {
+    animation: pulse-finish 2s ease-in-out infinite;
+  }
+  @keyframes pulse-finish {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(79,195,247,0.0); }
+    50% { box-shadow: 0 0 0 4px rgba(79,195,247,0.25); }
+  }
+  .annotate-hint { font-size: 11px; color: var(--dim); margin-left: 8px; flex: 1; min-width: 0; }
+  .ticket-card.in-progress {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+    background: rgba(79,195,247,0.06);
+  }
+  .ticket-card .in-progress-badge {
+    background: var(--accent);
+    color: #000;
     font-size: 10px;
-    font-family: -apple-system, monospace;
-    color: var(--text);
+    padding: 1px 6px;
+    border-radius: 8px;
+    margin-left: 6px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
   }
 
   /* Tickets side panel layout */
@@ -466,7 +492,8 @@
           <div class="color-swatch" data-color="#4fc3f7" style="background:#4fc3f7" title="Note" onclick="setActiveColor('#4fc3f7', this)"></div>
           <div class="color-swatch" data-color="#66bb6a" style="background:#66bb6a" title="Good" onclick="setActiveColor('#66bb6a', this)"></div>
           <input type="color" id="color-custom" value="#ff2020" title="Custom color" onchange="setActiveColor(this.value)">
-          <span class="annotate-hint">Hold <kbd>Shift</kbd> to add another stroke to the same annotation</span>
+          <span class="annotate-hint" id="annotate-hint">Click and drag to mark — all strokes join one ticket until you press Finish</span>
+          <button class="vbtn" id="btn-finish-ticket" onclick="finishCurrentTicket()" disabled>Finish</button>
           <button id="btn-clear-annotations" onclick="clearAllAnnotations()">Clear All</button>
         </div>
         <canvas id="viewer-canvas"></canvas>
@@ -1088,6 +1115,12 @@ window.toggleAnnotateMode = function() {
   viewerWrap.classList.toggle('annotating', annotateMode);
   document.getElementById('btn-annotate').classList.toggle('active', annotateMode);
   controls.enableRotate = !annotateMode;
+  // Auto-finish in-progress ticket when exiting annotate mode
+  if (!annotateMode && inProgressTicketId) {
+    inProgressTicketId = null;
+    renderTicketsPanel();
+  }
+  if (typeof updateFinishButton === 'function') updateFinishButton();
 };
 
 window.setActiveColor = function(color, swatchEl) {
@@ -1190,17 +1223,18 @@ function addTicketMarkerToScene(ticket) {
 }
 
 // Drag-to-paint state.
-// Each ticket has one or more "strokes" (point arrays). Hold Shift while
-// clicking/dragging to add a new stroke to the most recent ticket instead of
-// creating a separate ticket — useful for marking multiple regions of one issue.
-let activePaintTicket = null;
+// All strokes go to the SAME "in-progress" ticket until the user clicks Finish
+// (or toggles annotate mode off). This lets one annotation cover multiple
+// regions of the model with multiple comments/strokes.
+let inProgressTicketId = null;  // id of the currently open ticket, or null
+let activePaintTicket = null;   // ticket being actively drawn on right now
 let activeStroke = null;
 let lastPaintMoveTime = 0;
 const PAINT_THROTTLE_MS = 16;
 const MIN_POINT_DISTANCE_RATIO = 0.005;
 
-function lastTicket() {
-  return tickets.length ? tickets[tickets.length - 1] : null;
+function findTicketById(id) {
+  return tickets.find(t => t.id === id) || null;
 }
 
 // Ensure a ticket has the new strokes[] shape (migrate from legacy points[]).
@@ -1211,6 +1245,23 @@ function ensureStrokes(ticket) {
   return ticket.strokes;
 }
 
+function updateFinishButton() {
+  const btn = document.getElementById('btn-finish-ticket');
+  if (btn) btn.disabled = !inProgressTicketId;
+  const hint = document.getElementById('annotate-hint');
+  if (hint) {
+    hint.textContent = inProgressTicketId
+      ? 'Drawing on annotation #' + (tickets.findIndex(t => t.id === inProgressTicketId) + 1) + ' — press Finish to start a new one'
+      : 'Click and drag to mark — all strokes join one ticket until you press Finish';
+  }
+}
+
+window.finishCurrentTicket = function() {
+  inProgressTicketId = null;
+  updateFinishButton();
+  renderTicketsPanel();
+};
+
 canvas.addEventListener('mousedown', function(event) {
   if (!annotateMode || event.button !== 0) return;
   const hit = raycastModel(event);
@@ -1218,10 +1269,11 @@ canvas.addEventListener('mousedown', function(event) {
   event.preventDefault();
 
   const point = { x: hit.point.x, y: hit.point.y, z: hit.point.z };
+  const existing = inProgressTicketId ? findTicketById(inProgressTicketId) : null;
 
-  if (event.shiftKey && lastTicket()) {
-    // Append a new stroke to the existing most-recent ticket
-    activePaintTicket = lastTicket();
+  if (existing) {
+    // Append a new stroke to the in-progress ticket
+    activePaintTicket = existing;
     const strokes = ensureStrokes(activePaintTicket);
     activeStroke = [point];
     strokes.push(activeStroke);
@@ -1232,14 +1284,16 @@ canvas.addEventListener('mousedown', function(event) {
       id: uuid(),
       color: activeColor,
       strokes: [activeStroke],
-      points: [point], // legacy mirror for backward compat with existing data
+      points: [point], // legacy mirror for backward compat
       comment: '',
       model_key: currentModel,
       created_at: new Date().toISOString(),
     };
     tickets.push(activePaintTicket);
+    inProgressTicketId = activePaintTicket.id;
   }
   addTicketMarkerToScene(activePaintTicket);
+  updateFinishButton();
   render();
 });
 
@@ -1294,7 +1348,9 @@ window.clearAllAnnotations = function() {
   }
   ticketGroups.clear();
   tickets = [];
+  inProgressTicketId = null;
   renderTicketsPanel();
+  if (typeof updateFinishButton === 'function') updateFinishButton();
   render();
   scheduleSave();
 };
@@ -1316,16 +1372,21 @@ function renderTicketsPanel() {
   tickets.forEach((ticket, idx) => {
     const card = document.createElement('div');
     card.className = 'ticket-card';
+    if (ticket.id === inProgressTicketId) card.classList.add('in-progress');
     card.dataset.ticketId = ticket.id;
     const ts = new Date(ticket.created_at);
     const tsStr = ts.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const thumbHtml = ticket.screenshot
       ? `<img class="ticket-thumb" src="${ticket.screenshot}" alt="Annotation screenshot" onclick="event.stopPropagation();openLightbox('${ticket.screenshot}')">`
       : '';
+    const inProgressBadge = ticket.id === inProgressTicketId
+      ? '<span class="in-progress-badge">Drawing</span>'
+      : '';
     card.innerHTML = `
       <div class="ticket-card-header">
         <div class="ticket-color-dot" style="background:${ticket.color}"></div>
         <div class="ticket-index">#${idx + 1}</div>
+        ${inProgressBadge}
         <button class="ticket-delete" title="Delete" data-action="delete">&times;</button>
       </div>
       ${thumbHtml}
@@ -1372,7 +1433,9 @@ function deleteTicket(id) {
     ticketGroups.delete(id);
   }
   tickets.splice(idx, 1);
+  if (inProgressTicketId === id) inProgressTicketId = null;
   renderTicketsPanel();
+  if (typeof updateFinishButton === 'function') updateFinishButton();
   render();
   scheduleSave();
 }
@@ -1523,12 +1586,21 @@ document.addEventListener('keydown', function(e) {
     return;
   }
 
-  // Esc exits annotate mode + clears selection
+  // Esc: finish current ticket if drawing, otherwise exit annotate mode
   if (e.key === 'Escape') {
-    if (annotateMode) {
+    if (inProgressTicketId) {
+      finishCurrentTicket();
+    } else if (annotateMode) {
       toggleAnnotateMode();
     }
     document.querySelectorAll('.ticket-card.active').forEach(c => c.classList.remove('active'));
+    return;
+  }
+
+  // Enter (or 'F') finishes the current ticket
+  if ((e.key === 'Enter' || e.key === 'f' || e.key === 'F') && inProgressTicketId && !e.ctrlKey && !e.metaKey) {
+    e.preventDefault();
+    finishCurrentTicket();
     return;
   }
 
@@ -1549,11 +1621,10 @@ let lastTicketCount = 0;
 renderTicketsPanel = function() {
   const wasNew = tickets.length > lastTicketCount;
   origRenderPanel();
-  if (wasNew && tickets.length > 0) {
-    // Focus the first card's textarea (newest is at index 0 visually... actually we render in array order)
+  // Don't auto-focus while a ticket is in-progress (still being drawn)
+  if (wasNew && tickets.length > 0 && !inProgressTicketId) {
     const lastCard = ticketsList.querySelector('.ticket-card:last-child .ticket-comment');
     if (lastCard && annotateMode) {
-      // Don't auto-focus while still painting
       setTimeout(() => { if (!activePaintTicket) lastCard.focus(); }, 50);
     }
   }
