@@ -246,8 +246,10 @@
         <div id="viewer-controls">
           <div class="ctrl-group">
             <label>Model</label>
-            <button class="vbtn active" id="btn-raw"        onclick="switchModel('raw')">Raw Scan</button>
-            {% if glb_urls.autoshadow %}<button class="vbtn"        id="btn-autoshadow" onclick="switchModel('autoshadow')">AutoShadow</button>{% endif %}
+            <button class="vbtn active" id="btn-raw" onclick="switchModel('raw')">Raw Scan</button>
+            {% if glb_urls.source %}<button class="vbtn" id="btn-source" onclick="switchModel('source')">Source</button>{% endif %}
+            {% if glb_urls.optimised %}<button class="vbtn" id="btn-optimised" onclick="switchModel('optimised')">Optimised</button>{% endif %}
+            {% if glb_urls.autoshadow %}<button class="vbtn" id="btn-autoshadow" onclick="switchModel('autoshadow')">AutoShadow</button>{% endif %}
           </div>
           <div class="ctrl-sep"></div>
           <div class="ctrl-group">
@@ -391,27 +393,27 @@
     </div>
     <div class="section-body">
       <table class="summary-table">
-        {% set has_autoshadow = geometry.autoshadow and geometry.autoshadow.vertices %}
-        <thead><tr><th>Metric</th><th>Raw Scan</th>{% if has_autoshadow %}<th>AutoShadow</th>{% endif %}</tr></thead>
+        {% set model_labels = {'raw': 'Raw Scan', 'source': 'Source', 'optimised': 'Optimised', 'autoshadow': 'AutoShadow'} %}
+        {% set model_keys = [] %}
+        {% for k in ['raw', 'source', 'optimised', 'autoshadow'] %}
+          {% if geometry[k] and geometry[k].vertices %}{% set _ = model_keys.append(k) %}{% endif %}
+        {% endfor %}
+        <thead><tr><th>Metric</th>{% for key in model_keys %}<th>{{ model_labels[key] }}</th>{% endfor %}</tr></thead>
         <tbody>
           <tr>
             <td class="label">Vertices<span class="note">Total mesh vertex count</span></td>
-            <td>{{ "{:,}".format(geometry.raw.vertices) }}</td>
-            {% if has_autoshadow %}<td>{{ "{:,}".format(geometry.autoshadow.vertices) }}</td>{% endif %}
+            {% for key in model_keys %}<td>{{ "{:,}".format(geometry[key].vertices) }}</td>{% endfor %}
           </tr>
           <tr>
             <td class="label">Faces<span class="note">Total polygon count</span></td>
-            <td>{{ "{:,}".format(geometry.raw.faces) }}</td>
-            {% if has_autoshadow %}<td>{{ "{:,}".format(geometry.autoshadow.faces) }}</td>{% endif %}
+            {% for key in model_keys %}<td>{{ "{:,}".format(geometry[key].faces) }}</td>{% endfor %}
           </tr>
           <tr>
             <td class="label">File Size</td>
-            <td>{{ "%.1f"|format(geometry.raw.file_size_mb) }} MB</td>
-            {% if has_autoshadow %}<td>{{ "%.1f"|format(geometry.autoshadow.file_size_mb) }} MB</td>{% endif %}
+            {% for key in model_keys %}<td>{{ "%.1f"|format(geometry[key].file_size_mb) }} MB</td>{% endfor %}
           </tr>
           <tr>
             <td class="label">Textures<span class="note">Production target: 4096×4096</span></td>
-            {% set model_keys = ['raw', 'autoshadow'] if has_autoshadow else ['raw'] %}
             {% for key in model_keys %}
             <td>
               {% for t in geometry[key].textures %}{{ t.name }} ({{ t.width }}x{{ t.height }}){% if not t.is_4k %} <span style="color:var(--orange)">&#9888;</span>{% endif %}<br>{% endfor %}
@@ -457,7 +459,7 @@ import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 // ── State ─────────────────────────────────────────────────────────────────────
-const models = { raw: null, autoshadow: null };
+const models = { raw: null, source: null, optimised: null, autoshadow: null };
 const originalMaterials = new Map(); // mesh.uuid -> original material(s)
 let currentModel = 'raw';
 let currentMode  = 'standard';
@@ -709,7 +711,7 @@ window.switchModel = function(key) {
   }
   currentModel = key;
 
-  ['raw','autoshadow'].forEach(k => {
+  ['raw','source','optimised','autoshadow'].forEach(k => {
     const btn = document.getElementById('btn-' + k);
     if (btn) btn.classList.toggle('active', k === key);
   });
@@ -842,7 +844,7 @@ function updateStatus() {
   if (issues.flipped_normals > 0) parts.push(`${issues.flipped_normals} flipped normals`);
   if (issues.non_manifold > 0)    parts.push(`${issues.non_manifold} non-manifold`);
   if (issues.negative_uv > 0)     parts.push(`${issues.negative_uv} negative UV`);
-  const modelLabel = {raw:'Raw Scan', autoshadow:'AutoShadow'}[currentModel];
+  const modelLabel = {raw:'Raw Scan', source:'Source', optimised:'Optimised', autoshadow:'AutoShadow'}[currentModel];
   statusEl.textContent = parts.length
     ? `${modelLabel} · Issues: ${parts.join(', ')}`
     : `${modelLabel} · No geometry issues`;

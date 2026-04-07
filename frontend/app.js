@@ -27,7 +27,22 @@ function toggleUrlMode() {
 
 function updateSnippet() {
   const sku = document.getElementById('sku-input').value.trim().toUpperCase() || 'YOUR-SKU-HERE';
-  const code = `fetch('/api/scans?search=${sku}').then(r=>r.json()).then(d=>{const s=d.docs.find(s=>s.laterality==='left');if(!s)return console.log('No left scan');const p=s.product;const v=p.versions;const lv=v[v.length-1];const f=lv.files.find(f=>f.laterality==='left'&&f.type==='3d');const it=f.task.three.iterations;const last=it[it.length-1];console.log(JSON.stringify({sku:(p.clientTags||[]).find(t=>t.key==='clientSku')?.value||p.modelCode,raw:'https://dj5e08oeu5ym4.cloudfront.net/3e/'+s.glbFilename,autoshadow:'https://dj5e08oeu5ym4.cloudfront.net/3e/'+last.autoShadowFilename,brand:p.brand||'',color:p.color||'',silhouette:p.silhouette||''},null,2))})`;
+  const code =
+    "fetch('/api/assets?limit=1&where[sku][equals]=" + sku + "').then(r=>r.json()).then(d=>{" +
+    "var a=d.docs&&d.docs[0];if(!a)return console.log('Not found');" +
+    "var B='https://dj5e08oeu5ym4.cloudfront.net/3e/';" +
+    "var cp=a.canonicalAsset||{};" +
+    "var rfs=cp.referenceFiles||[];" +
+    "var rawScan=(rfs[0]&&rfs[0].name)||'';" +
+    "var vs=cp.versions||[],last=null;" +
+    "for(var i=vs.length-1;i>=0&&!last;i--){var files=vs[i].files||[];" +
+    "for(var j=0;j<files.length;j++){var f=files[j];" +
+    "if(f.laterality==='left'&&f.type==='3d'&&f.task&&f.task.three&&f.task.three.method==='covision_scan_touch_up'){" +
+    "var its=f.task.three.iterations||[];if(its.length){last=its[its.length-1];break;}}}}" +
+    "if(!last)return console.log('No touch-up');" +
+    "console.log(JSON.stringify({sku:'" + sku + "'," +
+    "raw:B+rawScan,source:B+(last.sourceFilename||''),optimised:B+(last.previewFilename||'')," +
+    "autoshadow:B+(last.autoShadowFilename||''),brand:cp.brand||'',color:cp.color||'',silhouette:cp.silhouette||''},null,2))})";
   const pre = document.getElementById('snippet-code');
   if (pre) pre.textContent = code;
 }
@@ -47,6 +62,8 @@ function parseJsonPaste() {
     const data = JSON.parse(textarea.value.trim());
     if (data.sku) document.getElementById('sku-input').value = data.sku;
     if (data.raw) document.getElementById('raw-url').value = data.raw;
+    if (data.source) document.getElementById('source-url').value = data.source;
+    if (data.optimised) document.getElementById('optimised-url').value = data.optimised;
     if (data.autoshadow) document.getElementById('autoshadow-url').value = data.autoshadow;
     textarea.style.borderColor = '#4ecca3';
     setTimeout(() => textarea.style.borderColor = '', 2000);
@@ -105,6 +122,8 @@ function analyzeSku() {
   let fetchPromise;
   if (currentMode === 'url') {
     const rawUrl = document.getElementById('raw-url').value.trim();
+    const sourceUrl = document.getElementById('source-url').value.trim();
+    const optimisedUrl = document.getElementById('optimised-url').value.trim();
     const autoshadowUrl = document.getElementById('autoshadow-url').value.trim();
 
     if (!rawUrl) {
@@ -118,10 +137,18 @@ function analyzeSku() {
     fetchPromise = fetch('/api/analyze-urls', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ sku, raw_url: rawUrl, autoshadow_url: autoshadowUrl })
+      body: JSON.stringify({
+        sku,
+        raw_url: rawUrl,
+        source_url: sourceUrl,
+        optimised_url: optimisedUrl,
+        autoshadow_url: autoshadowUrl
+      })
     });
   } else if (currentMode === 'file') {
     const rawFile = document.getElementById('raw-file').files[0];
+    const sourceFile = document.getElementById('source-file').files[0];
+    const optimisedFile = document.getElementById('optimised-file').files[0];
     const autoshadowFile = document.getElementById('autoshadow-file').files[0];
 
     if (!rawFile) {
@@ -135,6 +162,8 @@ function analyzeSku() {
     const formData = new FormData();
     formData.append('sku', sku);
     formData.append('raw_file', rawFile);
+    if (sourceFile) formData.append('source_file', sourceFile);
+    if (optimisedFile) formData.append('optimised_file', optimisedFile);
     if (autoshadowFile) formData.append('autoshadow_file', autoshadowFile);
 
     fetchPromise = fetch('/api/analyze-files', { method: 'POST', body: formData });

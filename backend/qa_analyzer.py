@@ -36,7 +36,7 @@ def analyze(geometry_results: dict, texture_diffs: dict, issue_renders: list = N
     findings = []
 
     # ─── Geometry analysis ────────────────────────────────
-    for model_key, label in [("raw", "Raw scan"), ("autoshadow", "AutoShadow")]:
+    for model_key, label in [("raw", "Raw Scan"), ("source", "Source"), ("optimised", "Optimised"), ("autoshadow", "AutoShadow")]:
         geom = geometry_results.get(model_key, {})
         findings.extend(_check_geometry(geom, model_key, label))
 
@@ -188,36 +188,22 @@ def _check_file_sizes(geometry_results: dict) -> list:
 
 
 def _check_texture_resolution(geometry_results: dict) -> list:
-    """Check texture resolutions across models."""
+    """Check texture resolutions. Only autoshadow has a 4K requirement;
+    raw/source/optimised textures are intentionally different and not flagged."""
     findings = []
 
-    for model_key, label in [("raw", "Raw scan"), ("autoshadow", "AutoShadow")]:
-        geom = geometry_results.get(model_key, {})
-        for tex in geom.get("textures", []):
-            if not tex.get("is_4k") and tex.get("width", 0) > 0:
-                if model_key == "autoshadow":
-                    # AutoShadow must produce 4K — flag as warning
-                    rule = ALL_RULES["tex_resolution_not_4k"]
-                    findings.append(Finding(
-                        rule_id=rule.id, severity="warning", model=model_key,
-                        title=f"AutoShadow output: {tex['name']} is {tex['width']}x{tex['height']} (should be 4K)",
-                        explanation=rule.explanation,
-                        recommendation=rule.what_to_do,
-                        data={"width": tex["width"], "height": tex["height"], "name": tex["name"]},
-                    ))
-                else:
-                    # Raw scan — info only
-                    findings.append(Finding(
-                        rule_id="tex_resolution_not_4k", severity="info", model=model_key,
-                        title=f"Raw scan: {tex['name']} is {tex['width']}x{tex['height']} (scanner output)",
-                        explanation=(
-                            f"The raw scan has textures at {tex['width']}x{tex['height']}. "
-                            "Scanner output resolution varies and is expected to differ from production targets."
-                        ),
-                        recommendation="Ensure the final autoshadow output uses 4K textures.",
-                        data={"width": tex["width"], "height": tex["height"], "name": tex["name"]},
-                    ))
-                break  # One finding per model is enough
+    geom = geometry_results.get("autoshadow", {})
+    for tex in geom.get("textures", []):
+        if not tex.get("is_4k") and tex.get("width", 0) > 0:
+            rule = ALL_RULES["tex_resolution_not_4k"]
+            findings.append(Finding(
+                rule_id=rule.id, severity="warning", model="autoshadow",
+                title=f"AutoShadow output: {tex['name']} is {tex['width']}x{tex['height']} (should be 4K)",
+                explanation=rule.explanation,
+                recommendation=rule.what_to_do,
+                data={"width": tex["width"], "height": tex["height"], "name": tex["name"]},
+            ))
+            break
 
     return findings
 

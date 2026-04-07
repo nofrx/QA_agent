@@ -10,9 +10,10 @@ class ScanData:
     brand: str
     color: str
     silhouette: str
-    raw_scan_filename: str
-    touchedup_filename: str
-    autoshadow_filename: str
+    raw_scan_filename: str       # from referenceFiles[0].name (actual raw scanner output)
+    source_filename: str         # from iter.sourceFilename (big touched-up source, ~89 MB)
+    optimised_filename: str      # from iter.previewFilename (small optimised preview, ~3.83 MB) — optional
+    autoshadow_filename: str     # from iter.autoShadowFilename — optional
     scan_id: str = ""
 
 
@@ -22,6 +23,12 @@ def extract_from_asset(asset: dict, sku: str) -> ScanData:
     brand = product.get("brand", "Unknown")
     color = product.get("color", "Unknown")
     silhouette = product.get("silhouette", "Unknown")
+
+    # Raw scan file lives in referenceFiles[0]
+    reference_files = product.get("referenceFiles", []) or []
+    raw_scan_filename = ""
+    if reference_files:
+        raw_scan_filename = reference_files[0].get("name", "") or ""
 
     versions = product.get("versions", [])
     if not versions:
@@ -40,18 +47,21 @@ def extract_from_asset(asset: dict, sku: str) -> ScanData:
             if not iterations:
                 continue
             latest = iterations[-1]
-            source = latest.get("sourceFilename")
-            touchedup = latest.get("previewFilename")
-            autoshadow = latest.get("autoShadowFilename")
-            if touchedup and autoshadow and source:
+            source = latest.get("sourceFilename") or ""
+            optimised = latest.get("previewFilename") or ""
+            autoshadow = latest.get("autoShadowFilename") or ""
+            if source:
+                # Fall back to source as raw scan if referenceFiles missing
+                raw = raw_scan_filename or source
                 return ScanData(
                     sku=sku, brand=brand, color=color, silhouette=silhouette,
-                    raw_scan_filename=source,
-                    touchedup_filename=touchedup,
+                    raw_scan_filename=raw,
+                    source_filename=source,
+                    optimised_filename=optimised,
                     autoshadow_filename=autoshadow,
                 )
 
-    raise ValueError(f"No touch-up iteration with all 3 files found for {sku}")
+    raise ValueError(f"No touch-up iteration with source file found for {sku}")
 
 
 async def find_scan_by_sku(api_base: str, api_key: str, sku: str) -> ScanData:
@@ -114,6 +124,8 @@ async def find_scan_by_sku_chrome(api_base: str, sku: str) -> ScanData:
         "var found=d.docs[0];"
         "var cp=found.canonicalAsset;"
         "if(!cp)return 'NO_CANONICAL';"
+        "var rfs=cp.referenceFiles||[];"
+        "var rawScan=(rfs.length>0?(rfs[0].name||''):'');"
         "var vs=cp.versions||[];"
         "var result=null;"
         "for(var vi=vs.length-1;vi>=0;vi--){"
@@ -126,8 +138,10 @@ async def find_scan_by_sku_chrome(api_base: str, sku: str) -> ScanData:
         "if(its.length>0){"
         "var last=its[its.length-1];"
         "result=JSON.stringify({"
-        "sku:sku.toUpperCase(),source:last.sourceFilename||'',"
-        "touchedup:last.previewFilename||'',"
+        "sku:sku.toUpperCase(),"
+        "raw_scan:rawScan,"
+        "source:last.sourceFilename||'',"
+        "optimised:last.previewFilename||'',"
         "autoshadow:last.autoShadowFilename||'',"
         "brand:cp.brand||'',color:cp.color||'',"
         "silhouette:cp.silhouette||''});"
@@ -220,14 +234,19 @@ async def find_scan_by_sku_chrome(api_base: str, sku: str) -> ScanData:
             )
 
         data = json_mod.loads(output)
+        source = data.get("source", "") or ""
+        raw_scan = data.get("raw_scan", "") or source
+        if not source:
+            raise ValueError(f"SKU {sku} has no source GLB in latest iteration")
         return ScanData(
             sku=data["sku"],
             brand=data.get("brand", "Unknown"),
             color=data.get("color", "Unknown"),
             silhouette=data.get("silhouette", "Unknown"),
-            raw_scan_filename=data["source"],
-            touchedup_filename=data["touchedup"],
-            autoshadow_filename=data["autoshadow"],
+            raw_scan_filename=raw_scan,
+            source_filename=source,
+            optimised_filename=data.get("optimised", "") or "",
+            autoshadow_filename=data.get("autoshadow", "") or "",
         )
 
     except json_mod.JSONDecodeError:
@@ -275,14 +294,17 @@ def _extract_from_scan(scan: dict, sku: str) -> ScanData:
             if not iterations:
                 continue
             latest = iterations[-1]
-            source = latest.get("sourceFilename", scan.get("glbFilename", ""))
-            touchedup = latest.get("previewFilename")
-            autoshadow = latest.get("autoShadowFilename")
-            if touchedup and autoshadow:
+            source = latest.get("sourceFilename") or scan.get("glbFilename", "") or ""
+            optimised = latest.get("previewFilename") or ""
+            autoshadow = latest.get("autoShadowFilename") or ""
+            # Legacy /api/scans format — raw scan is scan.glbFilename
+            raw_scan = scan.get("glbFilename", "") or source
+            if source:
                 return ScanData(
                     sku=sku, brand=brand, color=color, silhouette=silhouette,
-                    raw_scan_filename=source,
-                    touchedup_filename=touchedup,
+                    raw_scan_filename=raw_scan,
+                    source_filename=source,
+                    optimised_filename=optimised,
                     autoshadow_filename=autoshadow,
                     scan_id=scan.get("id", ""),
                 )

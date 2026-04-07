@@ -85,6 +85,8 @@ async def start_analysis(sku: str):
 class UrlAnalysisRequest(BaseModel):
     sku: str
     raw_url: str
+    source_url: str = ""
+    optimised_url: str = ""
     autoshadow_url: str = ""
     brand: str = "Unknown"
     color: str = "Unknown"
@@ -118,6 +120,10 @@ async def start_analysis_urls(req: UrlAnalysisRequest):
     urls = {
         "raw": _fix_url(req.raw_url),
     }
+    if req.source_url:
+        urls["source"] = _fix_url(req.source_url)
+    if req.optimised_url:
+        urls["optimised"] = _fix_url(req.optimised_url)
     if req.autoshadow_url:
         urls["autoshadow"] = _fix_url(req.autoshadow_url)
 
@@ -149,6 +155,8 @@ async def start_analysis_urls(req: UrlAnalysisRequest):
 async def start_analysis_files(
     sku: str = Form(...),
     raw_file: UploadFile = File(...),
+    source_file: UploadFile = File(None),
+    optimised_file: UploadFile = File(None),
     autoshadow_file: UploadFile = File(None),
 ):
     """Start QA analysis using locally uploaded GLB files."""
@@ -165,21 +173,21 @@ async def start_analysis_files(
     # Save uploaded files to a temp session dir
     session_dir = storage.create_session(sku)
     file_paths = {}
-    for label, upload, filename in [
-        ("raw", raw_file, "raw_scan.glb"),
-    ]:
+
+    async def _save(upload: UploadFile, filename: str) -> str:
         path = os.path.join(session_dir, filename)
         content = await upload.read()
         with open(path, "wb") as f:
             f.write(content)
-        file_paths[label] = path
+        return path
 
+    file_paths["raw"] = await _save(raw_file, "raw_scan.glb")
+    if source_file:
+        file_paths["source"] = await _save(source_file, "source.glb")
+    if optimised_file:
+        file_paths["optimised"] = await _save(optimised_file, "optimised.glb")
     if autoshadow_file:
-        path = os.path.join(session_dir, "autoshadow.glb")
-        content = await autoshadow_file.read()
-        with open(path, "wb") as f:
-            f.write(content)
-        file_paths["autoshadow"] = path
+        file_paths["autoshadow"] = await _save(autoshadow_file, "autoshadow.glb")
 
     async def run():
         try:
@@ -187,9 +195,10 @@ async def start_analysis_files(
                 jobs[job_id]["messages"].append(msg)
 
             await on_progress(f"Using uploaded files for {sku}")
-            await on_progress(f"  raw scan: {os.path.getsize(file_paths['raw']) / 1024 / 1024:.1f} MB")
-            if "autoshadow" in file_paths:
-                await on_progress(f"  autoshadow: {os.path.getsize(file_paths['autoshadow']) / 1024 / 1024:.1f} MB")
+            for key in ["raw", "source", "optimised", "autoshadow"]:
+                if key in file_paths:
+                    size_mb = os.path.getsize(file_paths[key]) / 1024 / 1024
+                    await on_progress(f"  {key}: {size_mb:.1f} MB")
 
             # Run pipeline with local_files instead of urls
             report_path, sess_dir = await run_qa_pipeline(

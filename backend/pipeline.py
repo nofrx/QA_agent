@@ -35,7 +35,14 @@ async def run_qa_pipeline(
     Modes:
     - auto: look up SKU on dashboard, download from CloudFront
     - urls: download from provided CloudFront URLs
-    - local_files: use already-saved local GLB files ({"raw": path, "autoshadow": path})
+    - local_files: use already-saved local GLB files
+        ({"raw": path, "source": path, "optimised": path, "autoshadow": path})
+
+    Models (in order):
+        1. raw        — actual raw scanner output (from referenceFiles[0])
+        2. source     — touched-up big source GLB (~89 MB)
+        3. optimised  — small optimised preview (~3.83 MB) [optional]
+        4. autoshadow — final autoshadow output [optional]
     """
     storage = Storage(config.reports_dir)
 
@@ -56,6 +63,8 @@ async def run_qa_pipeline(
     if local_files:
         session_dir = session_dir_override or storage.create_session(sku)
         raw_path = local_files["raw"]
+        source_path = local_files.get("source")
+        optimised_path = local_files.get("optimised")
         autoshadow_path = local_files.get("autoshadow")
 
     else:
@@ -69,6 +78,10 @@ async def run_qa_pipeline(
                 urls = {}
                 if scan_data.raw_scan_filename:
                     urls["raw"] = f"{config.cloudfront_base}/{scan_data.raw_scan_filename}"
+                if scan_data.source_filename:
+                    urls["source"] = f"{config.cloudfront_base}/{scan_data.source_filename}"
+                if scan_data.optimised_filename:
+                    urls["optimised"] = f"{config.cloudfront_base}/{scan_data.optimised_filename}"
                 if scan_data.autoshadow_filename:
                     urls["autoshadow"] = f"{config.cloudfront_base}/{scan_data.autoshadow_filename}"
                 if not urls.get("raw"):
@@ -80,11 +93,13 @@ async def run_qa_pipeline(
 
         session_dir = session_dir_override or storage.create_session(sku)
         raw_path = os.path.join(session_dir, "raw_scan.glb")
-        autoshadow_path = os.path.join(session_dir, "autoshadow.glb") if "autoshadow" in urls else None
+        source_path = os.path.join(session_dir, "source.glb") if urls.get("source") else None
+        optimised_path = os.path.join(session_dir, "optimised.glb") if urls.get("optimised") else None
+        autoshadow_path = os.path.join(session_dir, "autoshadow.glb") if urls.get("autoshadow") else None
 
         # ── Parallel downloads ─────────────────────────────────────────────────
         t0 = time.time()
-        model_count = 1 + (1 if autoshadow_path else 0)
+        model_count = 1 + (1 if source_path else 0) + (1 if optimised_path else 0) + (1 if autoshadow_path else 0)
         await progress(f"Downloading {model_count} model{'s' if model_count > 1 else ''} in parallel...")
 
         async def _download(label, url_key, out_path):
@@ -96,35 +111,53 @@ async def run_qa_pipeline(
         download_tasks = [
             _download("raw scan", "raw", raw_path),
         ]
+        if source_path:
+            download_tasks.append(_download("source", "source", source_path))
+        if optimised_path:
+            download_tasks.append(_download("optimised", "optimised", optimised_path))
         if autoshadow_path:
             download_tasks.append(_download("autoshadow", "autoshadow", autoshadow_path))
         await asyncio.gather(*download_tasks)
         await progress(f"  Downloads done in {_t(t0)}")
+        if not source_path:
+            await progress("  Note: no source model available for this SKU")
+        if not optimised_path:
+            await progress("  Note: no optimised model available for this SKU")
         if not autoshadow_path:
             await progress("  Note: no autoshadow model available for this SKU")
 
     # ── Step 4: Parallel geometry analysis ────────────────────────────────────
     loop = asyncio.get_event_loop()
     t0 = time.time()
-    model_count = 1 + (1 if autoshadow_path else 0)
+    model_count = 1 + (1 if source_path else 0) + (1 if optimised_path else 0) + (1 if autoshadow_path else 0)
     await progress(f"Analyzing geometry ({model_count} model{'s' if model_count > 1 else ''} in parallel)...")
 
+    # Build list of (key, path) pairs in canonical order
+    model_paths = [("raw", raw_path)]
+    if source_path:
+        model_paths.append(("source", source_path))
+    if optimised_path:
+        model_paths.append(("optimised", optimised_path))
+    if autoshadow_path:
+        model_paths.append(("autoshadow", autoshadow_path))
+
     geom_tasks = [
-        loop.run_in_executor(None, run_geometry_analysis, config.blender_path, raw_path,        os.path.join(session_dir, "geometry_raw.json")),
+        loop.run_in_executor(
+            None, run_geometry_analysis, config.blender_path, path,
+            os.path.join(session_dir, f"geometry_{key}.json")
+        )
+        for key, path in model_paths
     ]
-    if autoshadow_path:
-        geom_tasks.append(loop.run_in_executor(None, run_geometry_analysis, config.blender_path, autoshadow_path, os.path.join(session_dir, "geometry_autoshadow.json")))
-
     geom_results_list = await asyncio.gather(*geom_tasks)
-    raw_geom = geom_results_list[0]
-    autoshadow_geom = geom_results_list[1] if autoshadow_path else {}
+    geometry_results = {"raw": {}, "source": {}, "optimised": {}, "autoshadow": {}}
+    for (key, _), geom in zip(model_paths, geom_results_list):
+        geometry_results[key] = geom
 
-    await progress(f"  Raw: {raw_geom.get('vertices', 0):,} verts, {raw_geom.get('total_issues', 0)} issues")
-    if autoshadow_path:
-        await progress(f"  AutoShadow: {autoshadow_geom.get('vertices', 0):,} verts, {autoshadow_geom.get('total_issues', 0)} issues")
+    labels = {"raw": "Raw", "source": "Source", "optimised": "Optimised", "autoshadow": "AutoShadow"}
+    for key, _ in model_paths:
+        g = geometry_results[key]
+        await progress(f"  {labels[key]}: {g.get('vertices', 0):,} verts, {g.get('total_issues', 0)} issues")
     await progress(f"  Geometry done in {_t(t0)}")
-
-    geometry_results = {"raw": raw_geom, "autoshadow": autoshadow_geom}
 
     # ── Step 5: Parallel texture extraction ───────────────────────────────────
     tex_dir = os.path.join(session_dir, "textures")
@@ -140,15 +173,11 @@ async def run_qa_pipeline(
             await progress(f"  {label}: extraction failed ({e})")
             return {"textures": {}}
 
-    tex_tasks = [
-        _extract("raw scan", raw_path),
-    ]
-    if autoshadow_path:
-        tex_tasks.append(_extract("autoshadow", autoshadow_path))
-
+    tex_tasks = [_extract(labels[key], path) for key, path in model_paths]
     tex_results_list = await asyncio.gather(*tex_tasks)
-    raw_tex = tex_results_list[0]
-    autoshadow_tex = tex_results_list[1] if autoshadow_path else {"textures": {}}
+    tex_by_key = {key: result for (key, _), result in zip(model_paths, tex_results_list)}
+    raw_tex = tex_by_key.get("raw", {"textures": {}})
+    autoshadow_tex = tex_by_key.get("autoshadow", {"textures": {}})
     await progress(f"  Texture extraction done in {_t(t0)}")
 
     # ── Step 6: Texture comparison ────────────────────────────────────────────
@@ -187,8 +216,12 @@ async def run_qa_pipeline(
     # Build GLB URLs for the interactive 3D viewer
     session_name = os.path.basename(session_dir)
     glb_urls = {
-        "raw":        f"/api/reports/{sku}/{session_name}/files/raw_scan.glb",
+        "raw": f"/api/reports/{sku}/{session_name}/files/raw_scan.glb",
     }
+    if source_path:
+        glb_urls["source"] = f"/api/reports/{sku}/{session_name}/files/source.glb"
+    if optimised_path:
+        glb_urls["optimised"] = f"/api/reports/{sku}/{session_name}/files/optimised.glb"
     if autoshadow_path:
         glb_urls["autoshadow"] = f"/api/reports/{sku}/{session_name}/files/autoshadow.glb"
 

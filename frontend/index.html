@@ -28,7 +28,9 @@
     <div class="mode-section" id="url-mode-section" style="display:none;">
       <div class="mode-label">Paste CloudFront URLs</div>
       <div class="url-fields">
-        <input type="text" id="raw-url" placeholder="Raw scan GLB URL" autocomplete="off">
+        <input type="text" id="raw-url" placeholder="Raw Scan GLB URL (required)" autocomplete="off">
+        <input type="text" id="source-url" placeholder="Source GLB URL (optional)" autocomplete="off">
+        <input type="text" id="optimised-url" placeholder="Optimised GLB URL (optional)" autocomplete="off">
         <input type="text" id="autoshadow-url" placeholder="AutoShadow GLB URL (optional)" autocomplete="off">
         <details class="helper-details">
           <summary>Get URLs from dashboard console</summary>
@@ -44,9 +46,19 @@
       <div class="mode-label">Upload local GLB files</div>
       <div class="file-fields">
         <label class="file-input-label">
-          Raw scan GLB
+          Raw Scan GLB (required)
           <input type="file" id="raw-file" accept=".glb" onchange="updateFileLabel(this)">
           <span class="file-name" id="raw-file-name">No file chosen</span>
+        </label>
+        <label class="file-input-label">
+          Source GLB (optional)
+          <input type="file" id="source-file" accept=".glb" onchange="updateFileLabel(this)">
+          <span class="file-name" id="source-file-name">No file chosen</span>
+        </label>
+        <label class="file-input-label">
+          Optimised GLB (optional)
+          <input type="file" id="optimised-file" accept=".glb" onchange="updateFileLabel(this)">
+          <span class="file-name" id="optimised-file-name">No file chosen</span>
         </label>
         <label class="file-input-label">
           AutoShadow GLB (optional)

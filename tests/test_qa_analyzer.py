@@ -23,14 +23,14 @@ def _mock_diff(pct=50.0, max_diff=200, mean_diff=80.0):
 
 
 def test_clean_model_passes():
-    geom = {"raw": _mock_geom(), "autoshadow": _mock_geom(file_mb=3.5)}
+    geom = {"raw": _mock_geom(), "source": _mock_geom(), "optimised": _mock_geom(), "autoshadow": _mock_geom(file_mb=3.5)}
     report = analyze(geom, {})
     assert report.verdict == "PASS"
     assert report.critical_count == 0
 
 
 def test_flipped_normals_fails():
-    geom = {"raw": _mock_geom(), "autoshadow": _mock_geom(flipped=18)}
+    geom = {"raw": _mock_geom(), "source": _mock_geom(), "optimised": _mock_geom(), "autoshadow": _mock_geom(flipped=18)}
     report = analyze(geom, {})
     assert report.verdict == "FAIL"
     assert report.critical_count >= 1
@@ -39,7 +39,7 @@ def test_flipped_normals_fails():
 
 
 def test_raw_vs_autoshadow_basecolor_is_expected():
-    geom = {"raw": _mock_geom(), "autoshadow": _mock_geom()}
+    geom = {"raw": _mock_geom(), "source": _mock_geom(), "optimised": _mock_geom(), "autoshadow": _mock_geom()}
     diffs = {"basecolor": {"raw_vs_autoshadow": _mock_diff(pct=90.0)}}
     report = analyze(geom, diffs)
     expected = [f for f in report.findings if f.severity == "expected" and "basecolor" in f.title.lower()]
@@ -47,7 +47,7 @@ def test_raw_vs_autoshadow_basecolor_is_expected():
 
 
 def test_autoshadow_normal_change_warns():
-    geom = {"raw": _mock_geom(), "autoshadow": _mock_geom()}
+    geom = {"raw": _mock_geom(), "source": _mock_geom(), "optimised": _mock_geom(), "autoshadow": _mock_geom()}
     diffs = {"normal": {"raw_vs_autoshadow": _mock_diff(pct=80.0, max_diff=255, mean_diff=120.0)}}
     report = analyze(geom, diffs)
     assert report.verdict == "NEEDS_REVIEW"
@@ -56,7 +56,7 @@ def test_autoshadow_normal_change_warns():
 
 
 def test_autoshadow_normal_minimal_is_ok():
-    geom = {"raw": _mock_geom(), "autoshadow": _mock_geom()}
+    geom = {"raw": _mock_geom(), "source": _mock_geom(), "optimised": _mock_geom(), "autoshadow": _mock_geom()}
     diffs = {"normal": {"raw_vs_autoshadow": _mock_diff(pct=0.5, max_diff=10)}}
     report = analyze(geom, diffs)
     expected = [f for f in report.findings if f.rule_id == "tex_autoshadow_normal_ok"]
@@ -64,7 +64,7 @@ def test_autoshadow_normal_minimal_is_ok():
 
 
 def test_doubled_normal_is_warning():
-    geom = {"raw": _mock_geom(), "autoshadow": _mock_geom()}
+    geom = {"raw": _mock_geom(), "source": _mock_geom(), "optimised": _mock_geom(), "autoshadow": _mock_geom()}
     diffs = {"normal": {"raw_vs_autoshadow": _mock_diff(pct=80.0, max_diff=255, mean_diff=120.0)}}
     report = analyze(geom, diffs)
     warnings = [f for f in report.findings if f.severity == "warning"]
