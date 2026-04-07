@@ -471,7 +471,7 @@ const statusEl = document.getElementById('viewer-status');
 renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMapping = THREE.NeutralToneMapping;
 renderer.toneMappingExposure = 1.0;
 renderer.shadowMap.enabled = false;
 renderer.setClearColor(0x0d1117);
@@ -793,9 +793,9 @@ function applyMode(mode) {
   // Always restore first
   restoreMaterials(group);
 
-  // Standard PBR uses original materials with tone mapping
+  // Standard PBR uses original materials with neutral tone mapping
   if (mode === 'standard') {
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMapping = THREE.NeutralToneMapping;
     clearIssueMarkers();
     return;
   }
