@@ -1098,11 +1098,39 @@ function buildTicketGroup(ticket) {
   const group = new THREE.Group();
   const modelSize = getModelSize(models[ticket.model_key]);
   const radius = modelSize * 0.005;
+  const tubeRadius = modelSize * 0.004;
   const mat = new THREE.MeshBasicMaterial({ color: ticket.color });
-  for (const p of ticket.points) {
+  const points = ticket.points || [];
+
+  if (points.length === 1) {
+    // Single point: render as sphere
     const sphere = new THREE.Mesh(new THREE.SphereGeometry(radius, 16, 16), mat);
-    sphere.position.set(p.x, p.y, p.z);
+    sphere.position.set(points[0].x, points[0].y, points[0].z);
     group.add(sphere);
+  } else if (points.length >= 2) {
+    // Multi-point: render as tube along Catmull-Rom curve
+    const vec3Points = points.map(p => new THREE.Vector3(p.x, p.y, p.z));
+    // Always include sphere caps at endpoints
+    const startCap = new THREE.Mesh(new THREE.SphereGeometry(tubeRadius * 1.2, 12, 12), mat);
+    startCap.position.copy(vec3Points[0]);
+    group.add(startCap);
+    const endCap = new THREE.Mesh(new THREE.SphereGeometry(tubeRadius * 1.2, 12, 12), mat);
+    endCap.position.copy(vec3Points[vec3Points.length - 1]);
+    group.add(endCap);
+    try {
+      const curve = new THREE.CatmullRomCurve3(vec3Points, false, 'catmullrom', 0.3);
+      const segments = Math.min(points.length * 4, 200);
+      const tubeGeom = new THREE.TubeGeometry(curve, segments, tubeRadius, 8, false);
+      const tube = new THREE.Mesh(tubeGeom, mat);
+      group.add(tube);
+    } catch (e) {
+      // Fallback: render each point as a sphere
+      for (const p of vec3Points) {
+        const s = new THREE.Mesh(new THREE.SphereGeometry(tubeRadius, 8, 8), mat);
+        s.position.copy(p);
+        group.add(s);
+      }
+    }
   }
   group.userData.ticketId = ticket.id;
   return group;
@@ -1119,11 +1147,18 @@ function addTicketMarkerToScene(ticket) {
   ticketGroups.set(ticket.id, group);
 }
 
-canvas.addEventListener('click', function(event) {
-  if (!annotateMode) return;
+// Drag-to-paint state
+let activePaintTicket = null;
+let lastPaintMoveTime = 0;
+const PAINT_THROTTLE_MS = 16;
+const MIN_POINT_DISTANCE_RATIO = 0.005; // skip points too close together
+
+canvas.addEventListener('mousedown', function(event) {
+  if (!annotateMode || event.button !== 0) return;
   const hit = raycastModel(event);
   if (!hit) return;
-  const ticket = {
+  event.preventDefault();
+  activePaintTicket = {
     id: uuid(),
     color: activeColor,
     points: [{ x: hit.point.x, y: hit.point.y, z: hit.point.z }],
@@ -1131,11 +1166,37 @@ canvas.addEventListener('click', function(event) {
     model_key: currentModel,
     created_at: new Date().toISOString(),
   };
-  tickets.push(ticket);
-  addTicketMarkerToScene(ticket);
-  renderTicketsPanel();
+  tickets.push(activePaintTicket);
+  addTicketMarkerToScene(activePaintTicket);
   render();
 });
+
+canvas.addEventListener('mousemove', function(event) {
+  if (!annotateMode || !activePaintTicket) return;
+  const now = performance.now();
+  if (now - lastPaintMoveTime < PAINT_THROTTLE_MS) return;
+  lastPaintMoveTime = now;
+  const hit = raycastModel(event);
+  if (!hit) return;
+  // Skip points that are too close to the previous one (avoids tube self-intersection)
+  const last = activePaintTicket.points[activePaintTicket.points.length - 1];
+  const modelSize = getModelSize(models[activePaintTicket.model_key]);
+  const minDist = modelSize * MIN_POINT_DISTANCE_RATIO;
+  const dx = hit.point.x - last.x, dy = hit.point.y - last.y, dz = hit.point.z - last.z;
+  if (Math.sqrt(dx * dx + dy * dy + dz * dz) < minDist) return;
+  activePaintTicket.points.push({ x: hit.point.x, y: hit.point.y, z: hit.point.z });
+  addTicketMarkerToScene(activePaintTicket);
+  render();
+});
+
+function finalizePaint() {
+  if (!activePaintTicket) return;
+  activePaintTicket = null;
+  renderTicketsPanel();
+}
+
+canvas.addEventListener('mouseup', finalizePaint);
+canvas.addEventListener('mouseleave', finalizePaint);
 
 window.clearAllAnnotations = function() {
   if (tickets.length === 0) return;
