@@ -2,7 +2,7 @@ import asyncio
 import os
 import json
 import uuid
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -354,8 +354,12 @@ async def get_storyboard(sku: str, session: str):
 
 
 @app.put("/api/reports/{sku}/{session}/tickets")
-async def put_tickets(sku: str, session: str, tickets: list):
+async def put_tickets(sku: str, session: str, request: Request):
     """Replace the annotation tickets for a session."""
+    try:
+        tickets = await request.json()
+    except Exception:
+        raise HTTPException(400, "Invalid JSON body")
     if not isinstance(tickets, list):
         raise HTTPException(400, "Body must be a JSON list")
     for t in tickets:

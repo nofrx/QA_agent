@@ -165,6 +165,16 @@
   }
   #btn-clear-annotations:hover { background: rgba(239,83,80,0.25); }
   #btn-annotate.active { background: var(--green); border-color: var(--green); color: #fff; }
+  .annotate-hint { font-size: 11px; color: var(--dim); margin-left: 8px; }
+  .annotate-hint kbd {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-size: 10px;
+    font-family: -apple-system, monospace;
+    color: var(--text);
+  }
 
   /* Tickets side panel layout */
   #viewer-layout {
@@ -456,6 +466,7 @@
           <div class="color-swatch" data-color="#4fc3f7" style="background:#4fc3f7" title="Note" onclick="setActiveColor('#4fc3f7', this)"></div>
           <div class="color-swatch" data-color="#66bb6a" style="background:#66bb6a" title="Good" onclick="setActiveColor('#66bb6a', this)"></div>
           <input type="color" id="color-custom" value="#ff2020" title="Custom color" onchange="setActiveColor(this.value)">
+          <span class="annotate-hint">Hold <kbd>Shift</kbd> to add another stroke to the same annotation</span>
           <button id="btn-clear-annotations" onclick="clearAllAnnotations()">Clear All</button>
         </div>
         <canvas id="viewer-canvas"></canvas>
@@ -1125,38 +1136,41 @@ function buildTicketGroup(ticket) {
   const tubeRadius = modelSize * 0.004;
   const mat = new THREE.MeshBasicMaterial({ color: ticket.color, depthTest: true });
   const outlineMat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.BackSide });
-  const points = ticket.points || [];
 
-  if (points.length === 1) {
-    // Single point: render as sphere with black outline
-    const sphere = new THREE.Mesh(new THREE.SphereGeometry(radius, 16, 16), mat);
-    sphere.position.set(points[0].x, points[0].y, points[0].z);
-    const outline = new THREE.Mesh(new THREE.SphereGeometry(radius * 1.18, 16, 16), outlineMat);
-    outline.position.copy(sphere.position);
-    group.add(outline);
-    group.add(sphere);
-  } else if (points.length >= 2) {
-    // Multi-point: render as tube along Catmull-Rom curve
-    const vec3Points = points.map(p => new THREE.Vector3(p.x, p.y, p.z));
-    // Always include sphere caps at endpoints
-    const startCap = new THREE.Mesh(new THREE.SphereGeometry(tubeRadius * 1.2, 12, 12), mat);
-    startCap.position.copy(vec3Points[0]);
-    group.add(startCap);
-    const endCap = new THREE.Mesh(new THREE.SphereGeometry(tubeRadius * 1.2, 12, 12), mat);
-    endCap.position.copy(vec3Points[vec3Points.length - 1]);
-    group.add(endCap);
-    try {
-      const curve = new THREE.CatmullRomCurve3(vec3Points, false, 'catmullrom', 0.3);
-      const segments = Math.min(points.length * 4, 200);
-      const tubeGeom = new THREE.TubeGeometry(curve, segments, tubeRadius, 8, false);
-      const tube = new THREE.Mesh(tubeGeom, mat);
-      group.add(tube);
-    } catch (e) {
-      // Fallback: render each point as a sphere
-      for (const p of vec3Points) {
-        const s = new THREE.Mesh(new THREE.SphereGeometry(tubeRadius, 8, 8), mat);
-        s.position.copy(p);
-        group.add(s);
+  // Use strokes[] if present, otherwise fall back to a single stroke from points[]
+  const strokes = ticket.strokes && ticket.strokes.length
+    ? ticket.strokes
+    : (ticket.points && ticket.points.length ? [ticket.points] : []);
+
+  for (const points of strokes) {
+    if (!points.length) continue;
+    if (points.length === 1) {
+      const sphere = new THREE.Mesh(new THREE.SphereGeometry(radius, 16, 16), mat);
+      sphere.position.set(points[0].x, points[0].y, points[0].z);
+      const outline = new THREE.Mesh(new THREE.SphereGeometry(radius * 1.18, 16, 16), outlineMat);
+      outline.position.copy(sphere.position);
+      group.add(outline);
+      group.add(sphere);
+    } else {
+      const vec3Points = points.map(p => new THREE.Vector3(p.x, p.y, p.z));
+      const startCap = new THREE.Mesh(new THREE.SphereGeometry(tubeRadius * 1.2, 12, 12), mat);
+      startCap.position.copy(vec3Points[0]);
+      group.add(startCap);
+      const endCap = new THREE.Mesh(new THREE.SphereGeometry(tubeRadius * 1.2, 12, 12), mat);
+      endCap.position.copy(vec3Points[vec3Points.length - 1]);
+      group.add(endCap);
+      try {
+        const curve = new THREE.CatmullRomCurve3(vec3Points, false, 'catmullrom', 0.3);
+        const segments = Math.min(points.length * 4, 200);
+        const tubeGeom = new THREE.TubeGeometry(curve, segments, tubeRadius, 8, false);
+        const tube = new THREE.Mesh(tubeGeom, mat);
+        group.add(tube);
+      } catch (e) {
+        for (const p of vec3Points) {
+          const s = new THREE.Mesh(new THREE.SphereGeometry(tubeRadius, 8, 8), mat);
+          s.position.copy(p);
+          group.add(s);
+        }
       }
     }
   }
@@ -1175,50 +1189,80 @@ function addTicketMarkerToScene(ticket) {
   ticketGroups.set(ticket.id, group);
 }
 
-// Drag-to-paint state
+// Drag-to-paint state.
+// Each ticket has one or more "strokes" (point arrays). Hold Shift while
+// clicking/dragging to add a new stroke to the most recent ticket instead of
+// creating a separate ticket — useful for marking multiple regions of one issue.
 let activePaintTicket = null;
+let activeStroke = null;
 let lastPaintMoveTime = 0;
 const PAINT_THROTTLE_MS = 16;
-const MIN_POINT_DISTANCE_RATIO = 0.005; // skip points too close together
+const MIN_POINT_DISTANCE_RATIO = 0.005;
+
+function lastTicket() {
+  return tickets.length ? tickets[tickets.length - 1] : null;
+}
+
+// Ensure a ticket has the new strokes[] shape (migrate from legacy points[]).
+function ensureStrokes(ticket) {
+  if (!ticket.strokes) {
+    ticket.strokes = (ticket.points && ticket.points.length) ? [ticket.points.slice()] : [];
+  }
+  return ticket.strokes;
+}
 
 canvas.addEventListener('mousedown', function(event) {
   if (!annotateMode || event.button !== 0) return;
   const hit = raycastModel(event);
   if (!hit) return;
   event.preventDefault();
-  activePaintTicket = {
-    id: uuid(),
-    color: activeColor,
-    points: [{ x: hit.point.x, y: hit.point.y, z: hit.point.z }],
-    comment: '',
-    model_key: currentModel,
-    created_at: new Date().toISOString(),
-  };
-  tickets.push(activePaintTicket);
+
+  const point = { x: hit.point.x, y: hit.point.y, z: hit.point.z };
+
+  if (event.shiftKey && lastTicket()) {
+    // Append a new stroke to the existing most-recent ticket
+    activePaintTicket = lastTicket();
+    const strokes = ensureStrokes(activePaintTicket);
+    activeStroke = [point];
+    strokes.push(activeStroke);
+  } else {
+    // Create a new ticket with its first stroke
+    activeStroke = [point];
+    activePaintTicket = {
+      id: uuid(),
+      color: activeColor,
+      strokes: [activeStroke],
+      points: [point], // legacy mirror for backward compat with existing data
+      comment: '',
+      model_key: currentModel,
+      created_at: new Date().toISOString(),
+    };
+    tickets.push(activePaintTicket);
+  }
   addTicketMarkerToScene(activePaintTicket);
   render();
 });
 
 canvas.addEventListener('mousemove', function(event) {
-  if (!annotateMode || !activePaintTicket) return;
+  if (!annotateMode || !activePaintTicket || !activeStroke) return;
   const now = performance.now();
   if (now - lastPaintMoveTime < PAINT_THROTTLE_MS) return;
   lastPaintMoveTime = now;
   const hit = raycastModel(event);
   if (!hit) return;
-  // Skip points that are too close to the previous one (avoids tube self-intersection)
-  const last = activePaintTicket.points[activePaintTicket.points.length - 1];
+  const last = activeStroke[activeStroke.length - 1];
   const modelSize = getModelSize(models[activePaintTicket.model_key]);
   const minDist = modelSize * MIN_POINT_DISTANCE_RATIO;
   const dx = hit.point.x - last.x, dy = hit.point.y - last.y, dz = hit.point.z - last.z;
   if (Math.sqrt(dx * dx + dy * dy + dz * dz) < minDist) return;
-  activePaintTicket.points.push({ x: hit.point.x, y: hit.point.y, z: hit.point.z });
+  activeStroke.push({ x: hit.point.x, y: hit.point.y, z: hit.point.z });
+  // Keep legacy points field synced (union of all strokes)
+  activePaintTicket.points = activePaintTicket.strokes.flat();
   addTicketMarkerToScene(activePaintTicket);
   render();
 });
 
 function captureScreenshot() {
-  // Render then capture (preserveDrawingBuffer is false by default; render right before reading)
   render();
   try {
     return renderer.domElement.toDataURL('image/png');
@@ -1230,10 +1274,10 @@ function captureScreenshot() {
 
 function finalizePaint() {
   if (!activePaintTicket) return;
-  // Capture screenshot of the viewer at this moment
   const shot = captureScreenshot();
   if (shot) activePaintTicket.screenshot = shot;
   activePaintTicket = null;
+  activeStroke = null;
   renderTicketsPanel();
   scheduleSave();
 }

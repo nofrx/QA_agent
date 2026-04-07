@@ -85,6 +85,21 @@ config.json          → API keys, Blender path, CloudFront base URL
 - Downloads, geometry analysis, and texture extraction skip missing models
 - Report viewer hides AutoShadow tab and geometry table column when unavailable
 
+### Annotation & Storyboard System
+- QA artists can paint colored brush strokes directly on the 3D shoe in the report viewer
+- Each annotation = a "ticket" with multiple strokes, comment, screenshot, and model context
+- **Hold Shift** while clicking/dragging to add another stroke to the most recent ticket (multi-region annotations stay grouped)
+- Color picker: 6 presets (red/orange/yellow/blue/green) + custom picker
+- Side panel shows ticket cards with screenshot thumbnails, editable comments, camera fly-to on click
+- Auto-save with 600ms debounce → `tickets.json` in the session directory
+- Endpoints:
+  - `GET /api/reports/{sku}/{session}/tickets` — load saved tickets
+  - `PUT /api/reports/{sku}/{session}/tickets` — save tickets (full replacement)
+  - `GET /api/reports/{sku}/{session}/storyboard` — download self-contained HTML storyboard
+- Storyboard template: `templates/storyboard_template.html`
+- Keyboard shortcuts: `A` toggle annotate, `Esc` exit, `1`-`5` pick color
+- Backend renderer needs `preserveDrawingBuffer: true` for `toDataURL()` screenshots
+
 ### Performance
 - Downloads: parallel `asyncio.gather` (wall time = slowest file, not sum)
 - Blender: parallel `run_in_executor` for geometry + texture extraction
